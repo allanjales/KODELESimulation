@@ -8,22 +8,12 @@ DetectorConstruction::DetectorConstruction()
 	sensitiveDetector = new SensitiveDetector("SensitiveDetector", dataHandler);
 
 	// Step Limiter for each material
-	WorldUserLimits        = new G4UserLimits();
-	PolyethyleneUserLimits = new G4UserLimits();
-	GraphiteUserLimits     = new G4UserLimits();
-	BakeliteUserLimits     = new G4UserLimits();
-	GasUserLimits          = new G4UserLimits();
-	AluminiumUserLimits    = new G4UserLimits();
+	WorldUserLimits = new G4UserLimits();
 }
 
 DetectorConstruction::~DetectorConstruction()
 {
 	delete WorldUserLimits;
-	delete BakeliteUserLimits;
-	delete GraphiteUserLimits;
-	delete PolyethyleneUserLimits;
-	delete GasUserLimits;
-	delete AluminiumUserLimits;
 
 	delete detectorConstructionMessenger;
 
@@ -77,108 +67,153 @@ G4VPhysicalVolume *DetectorConstruction::Construct()
 
 
 	// Aluminium Plate
-
 	G4Material* AluminiumMaterial = nist->FindOrBuildMaterial("G4_Al");
 
-
 	// Vacuum, Bakelite, Graphyte, Polyethylene
-
 	G4Material* VacuumMaterial = nist->FindOrBuildMaterial("G4_Galactic");
+	G4Material* AirMaterial = nist->FindOrBuildMaterial("G4_AIR");
 	G4Material* BakeliteMaterial = nist->FindOrBuildMaterial("G4_BAKELITE");
 	G4Material* GraphiteMaterial = nist->FindOrBuildMaterial("G4_GRAPHITE");
 	G4Material* PolyethyleneMaterial = nist->FindOrBuildMaterial("G4_POLYETHYLENE");
+	G4Material* CooperMaterial = nist->FindOrBuildMaterial("G4_Cu");
 
 	// ----------------
 	// Setup
 	// ----------------
 
-	// World
+	double width = 50*cm, height = 50*cm;
 
-	auto WorldSolidVolume = new G4Box("WorldSolidVolume", 15.5*cm, 15.5*cm, 2.*cm);
+	// World
+	auto WorldSolidVolume = new G4Box("WorldSolidVolume", width/2 + .5*cm, width/2 + .5*cm, 1*cm);
 	WorldLogicalVolume = new G4LogicalVolume(WorldSolidVolume, VacuumMaterial, "WorldLogicalVolume", 0, 0, 0);
 	{
 		auto attr = new G4VisAttributes(G4Colour(1.,1.,1.));
 		attr->SetForceWireframe();
 		WorldLogicalVolume->SetVisAttributes(attr);
 	}
-	WorldPhysicalVolume = new G4PVPlacement(0, G4ThreeVector(), WorldLogicalVolume, "WorldPhysicalVolume", 0, false, 0);
 	WorldLogicalVolume->SetUserLimits(WorldUserLimits);
-
-	// Bakelites
-
-	auto BakeliteSolidVolume = new G4Box("BakeliteSolidVolume", 15.0*cm, 15.0*cm, 1.*mm);
-	BakeliteLogicalVolume = new G4LogicalVolume(BakeliteSolidVolume, BakeliteMaterial, "BakeliteLogicalVolume", 0, 0, 0);
+	
+	// Cooper Foil
+	auto CooperFoilSolidVolume = new G4Box("CooperFoilSolidVolume", width/2, height/2, 0.015*mm);
+	CooperFoilLogicalVolume = new G4LogicalVolume(CooperFoilSolidVolume, CooperMaterial, "CooperFoilLogicalVolume", 0, 0, 0);
 	{
-		auto attr = new G4VisAttributes(G4Colour(1.,1.,1.));
+		auto attr = new G4VisAttributes(G4Colour(.0,.5,0.));
 		attr->SetForceSolid();
-		BakeliteLogicalVolume->SetVisAttributes(attr);
+		CooperFoilLogicalVolume->SetVisAttributes(attr);
 	}
-	BakelitePhysicalVolume = new G4PVPlacement(0, G4ThreeVector(0., 0., -2.*mm), BakeliteLogicalVolume,
-		"BakelitePhysicalVolume", WorldLogicalVolume, false, 0);
-	BakelitePhysicalVolume = new G4PVPlacement(0, G4ThreeVector(0., 0., 2.*mm), BakeliteLogicalVolume,
-		"BakelitePhysicalVolume", WorldLogicalVolume, false, 1);
-	BakeliteLogicalVolume->SetUserLimits(BakeliteUserLimits);
 
+	// Polyethylene
+	auto PolyethyleneSolidVolume = new G4Box("PolyethyleneSolidVolume", width/2, height/2, 0.1*mm);
+	PolyethyleneLogicalVolume = new G4LogicalVolume(PolyethyleneSolidVolume, PolyethyleneMaterial, "PolyethyleneLogicalVolume", 0, 0, 0);
+	{
+		auto attr = new G4VisAttributes(G4Colour(.3,.7,.8));
+		attr->SetForceSolid();
+		PolyethyleneLogicalVolume->SetVisAttributes(attr);
+	}
 
-	// Graphite
-
-	auto GraphiteSolidVolume = new G4Box("GraphiteSolidVolume", 15.0*cm, 15.0*cm, .1*mm);
+	// Graphites
+	auto GraphiteSolidVolume = new G4Box("GraphiteSolidVolume", width/2, height/2, 0.1*mm);
 	GraphiteLogicalVolume = new G4LogicalVolume(GraphiteSolidVolume, GraphiteMaterial, "GraphiteLogicalVolume", 0, 0, 0);
 	{
 		auto attr = new G4VisAttributes(G4Colour(.5,.5,.5));
 		attr->SetForceSolid();
 		GraphiteLogicalVolume->SetVisAttributes(attr);
 	}
-	GraphitePhysicalVolume = new G4PVPlacement(0, G4ThreeVector(0., 0., -3.1*mm), GraphiteLogicalVolume,
-		"GraphitePhysicalVolume", WorldLogicalVolume, false, 0);
-	GraphitePhysicalVolume = new G4PVPlacement(0, G4ThreeVector(0., 0., 3.1*mm), GraphiteLogicalVolume,
-		"GraphitePhysicalVolume", WorldLogicalVolume, false, 1);
-	GraphiteLogicalVolume->SetUserLimits(GraphiteUserLimits);
 
-
-	// Polyethylene
-
-	auto PolyethyleneSolidVolume = new G4Box("PolyethyleneSolidVolume", 15.0*cm, 15.0*cm, .1*mm);
-	PolyethyleneLogicalVolume = new G4LogicalVolume(PolyethyleneSolidVolume, PolyethyleneMaterial, "PolyethyleneLogicalVolume", 0, 0, 0);
+	// Bakelites
+	auto BakeliteSolidVolume = new G4Box("BakeliteSolidVolume", width/2, height/2, 0.7*mm);
+	BakeliteLogicalVolume = new G4LogicalVolume(BakeliteSolidVolume, BakeliteMaterial, "BakeliteLogicalVolume", 0, 0, 0);
 	{
-		auto attr = new G4VisAttributes(G4Colour(1.,1.,0.));
+		auto attr = new G4VisAttributes(G4Colour(1.,0.,0.));
 		attr->SetForceSolid();
-		PolyethyleneLogicalVolume->SetVisAttributes(attr);
+		BakeliteLogicalVolume->SetVisAttributes(attr);
 	}
-	PolyethylenePhysicalVolume = new G4PVPlacement(0, G4ThreeVector(0., 0., -3.3*mm), PolyethyleneLogicalVolume,
-		"PolyethylenePhysicalVolume", WorldLogicalVolume, false, 0);
-	PolyethylenePhysicalVolume = new G4PVPlacement(0, G4ThreeVector(0., 0., 3.3*mm), PolyethyleneLogicalVolume,
-		"PolyethylenePhysicalVolume", WorldLogicalVolume, false, 1);
-	PolyethyleneLogicalVolume->SetUserLimits(PolyethyleneUserLimits);
-
 
 	// Gas
-
-	auto GasSolidVolume = new G4Box("GasSolidVolume", 15.0*cm, 15.0*cm, 1.*mm);
-	GasLogicalVolume = new G4LogicalVolume(GasSolidVolume, C2H2F4Material, "GasLogicalVolume", 0, 0, 0);
+	auto GasSolidVolume = new G4Box("GasSolidVolume", width/2, height/2, 0.7*mm);
+	GasLogicalVolumePos = new G4LogicalVolume(GasSolidVolume, C2H2F4Material, "GasLogicalVolumePos", 0, 0, 0);
+	GasLogicalVolumeNeg = new G4LogicalVolume(GasSolidVolume, C2H2F4Material, "GasLogicalVolumeNeg", 0, 0, 0);
 	{
 		auto attr = new G4VisAttributes(G4Colour(0.,1.,1.));
 		attr->SetForceWireframe();
-		GasLogicalVolume->SetVisAttributes(attr);
+		GasLogicalVolumePos->SetVisAttributes(attr);
+		GasLogicalVolumeNeg->SetVisAttributes(attr);
 	}
-	GasPhysicalVolume = new G4PVPlacement(0, G4ThreeVector(0., 0., 0.), GasLogicalVolume,
-		"GasPhysicalVolume", WorldLogicalVolume, false, 0);
-	GasLogicalVolume->SetUserLimits(GasUserLimits);
-	GasLogicalVolume->SetMaterial(C2H2F4Material);
 
-
-	// Aluminium Plate
-
-	auto AluminiumSolidVolume = new G4Box("AluminiumSolidVolume", 15.0*cm, 15.0*cm, 0.02*mm);
-	AluminiumLogicalVolume = new G4LogicalVolume(AluminiumSolidVolume, AluminiumMaterial, "AluminiumLogicalVolume", 0, 0, 0);
+	// Air
+	auto AirSolidVolume = new G4Box("AirSolidVolume", width/2, height/2, 0.5*mm);
+	AirLogicalVolume = new G4LogicalVolume(AirSolidVolume, AirMaterial, "AirLogicalVolume", 0, 0, 0);
 	{
-		auto attr = new G4VisAttributes(G4Colour(1.0,0.0,0.0));
-		attr->SetForceSolid();
-		AluminiumLogicalVolume->SetVisAttributes(attr);
+		auto attr = new G4VisAttributes(G4Colour(.0,.5,.5));
+		attr->SetForceWireframe();
+		AirLogicalVolume->SetVisAttributes(attr);
 	}
-	AluminiumPhysicalVolume = new G4PVPlacement(0, G4ThreeVector(0., 0., -3.42*mm), AluminiumLogicalVolume,
-		"AluminiumPhysicalVolume", WorldLogicalVolume, false, 0);
-	AluminiumLogicalVolume->SetUserLimits(AluminiumUserLimits);
+	
+	// Cooper Strips
+	double stripPitch = 3*cm;
+	auto CooperStripSolidVolume = new G4Box("CooperStripSolidVolume", width/2, stripPitch/2, 0.5*mm);
+	CooperStripLogicalVolume = new G4LogicalVolume(CooperStripSolidVolume, CooperMaterial, "CooperStripLogicalVolume", 0, 0, 0);
+	{
+		auto attr = new G4VisAttributes(G4Colour(.9,.9,.1));
+		attr->SetForceSolid();
+		CooperStripLogicalVolume->SetVisAttributes(attr);
+	}	
+
+	// ----------------
+	// Placing
+	// ----------------
+
+	// Place World
+	G4VPhysicalVolume* WorldPhysicalVolume = new G4PVPlacement(0, G4ThreeVector(), WorldLogicalVolume, "WorldPhysicalVolume", 0, false, 0); 
+
+	// Layers of the detector
+	std::vector<Layer> detectorStack = {
+		{CooperFoilLogicalVolume,   "CooperFoil",   0.03*mm},
+		{PolyethyleneLogicalVolume, "Polyethylene", 0.2*mm},
+		{GraphiteLogicalVolume,     "Graphite",     0.2*mm},
+		{BakeliteLogicalVolume,     "Bakelite",     1.4*mm},
+		{GasLogicalVolumePos,       "GasGapPos",    1.4*mm},
+		{BakeliteLogicalVolume,     "Bakelite",     1.4*mm},
+		{GraphiteLogicalVolume,     "Graphite",     0.2*mm},
+		{PolyethyleneLogicalVolume, "Polyethylene", 0.2*mm},
+		{CooperFoilLogicalVolume,   "CooperFoil",   0.03*mm},
+		{AirLogicalVolume,          "Air"       ,   1.0*mm},
+		{CooperFoilLogicalVolume,   "CooperFoil",   0.03*mm},
+		{PolyethyleneLogicalVolume, "Polyethylene", 0.2*mm},
+		{GraphiteLogicalVolume,     "Graphite",     0.2*mm},
+		{BakeliteLogicalVolume,     "Bakelite",     1.4*mm},
+		{GasLogicalVolumeNeg,       "GasGapNeg",    1.4*mm},
+		{BakeliteLogicalVolume,     "Bakelite",     1.4*mm},
+		{GraphiteLogicalVolume,     "Graphite",     0.2*mm},
+		{PolyethyleneLogicalVolume, "Polyethylene", 0.2*mm},
+		{CooperFoilLogicalVolume,   "CooperFoil",   0.03*mm}
+	};
+	
+	// Get total thickness of the detector
+	G4double currentZ = 0;
+	for (auto& layer : detectorStack)
+		currentZ += layer.thickness;
+	currentZ /= -2.;
+
+	// Place parts of the detector
+	std::map<G4LogicalVolume*, G4int> copyCounters;
+	for (auto& layer : detectorStack)
+	{
+		G4double posZ = currentZ + layer.thickness / 2.0;
+		G4int currentCopy = copyCounters[layer.logic]++; 
+
+		new G4PVPlacement(0, G4ThreeVector(0, 0, posZ), layer.logic, layer.name, WorldLogicalVolume, false, currentCopy, true);
+		currentZ += layer.thickness;
+	}
+
+	// Place Cooper Strips
+	G4VPhysicalVolume* AirGap = G4PhysicalVolumeStore::GetInstance()->GetVolume("Air");
+	int stripsCount = 16;
+	for (int i = 0; i < stripsCount; i++)
+	{
+		double posY = -height/2 + stripPitch/2 + i/(double)(stripsCount-1)*(height-stripPitch);
+		new G4PVPlacement(0, G4ThreeVector(0, posY, 0), CooperStripLogicalVolume, "CooperStrip", AirGap->GetLogicalVolume(), true, i, true);
+	}
 
 	return WorldPhysicalVolume;
 }
@@ -197,14 +232,19 @@ void DetectorConstruction::ConstructElectricField()
 	globalFieldManager->SetDetectorField(globalField);
 	CreateChordFinder(globalFieldManager, globalField);
 
-	// Set local eletric field
-	G4UniformElectricField* localField = new G4UniformElectricField(G4ThreeVector(0., 0., -4.5*kilovolt/mm));
-	G4FieldManager* localFieldManager = new G4FieldManager();
-	localFieldManager->SetDetectorField(localField);
-	CreateChordFinder(localFieldManager, localField);
+	// Set local eletric positive field
+	G4UniformElectricField* localPosField = new G4UniformElectricField(G4ThreeVector(0., 0., -4.5*kilovolt/mm));
+	G4FieldManager* localPosFieldManager = new G4FieldManager();
+	localPosFieldManager->SetDetectorField(localPosField);
+	CreateChordFinder(localPosFieldManager, localPosField);
+	GasLogicalVolumePos->SetFieldManager(localPosFieldManager, true);
 
-	// Set which parts will have eletric field
-	GasLogicalVolume->SetFieldManager(localFieldManager, true);
+	// Set local eletric positive field
+	G4UniformElectricField* localNegField = new G4UniformElectricField(G4ThreeVector(0., 0., 4.5*kilovolt/mm));
+	G4FieldManager* localNegFieldManager = new G4FieldManager();
+	localNegFieldManager->SetDetectorField(localNegField);
+	CreateChordFinder(localNegFieldManager, localNegField);
+	GasLogicalVolumeNeg->SetFieldManager(localNegFieldManager, true);
 }
 
 void DetectorConstruction::CreateChordFinder(G4FieldManager* fieldManager, G4ElectricField* field)
@@ -225,11 +265,13 @@ void DetectorConstruction::CreateChordFinder(G4FieldManager* fieldManager, G4Ele
 
 void DetectorConstruction::ConstructSensitiveDetector()
 {
-	GasLogicalVolume->SetSensitiveDetector(sensitiveDetector);
+	GasLogicalVolumePos->SetSensitiveDetector(sensitiveDetector);
+	GasLogicalVolumeNeg->SetSensitiveDetector(sensitiveDetector);
 }
 
 void DetectorConstruction::SetGasMaterial(G4Material* material)
 {
-	GasLogicalVolume->SetMaterial(material);
+	GasLogicalVolumePos->SetMaterial(material);
+	GasLogicalVolumeNeg->SetMaterial(material);
 	G4cout << "Gas material set to " + material->GetName() + "\n";
 }

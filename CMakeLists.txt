@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.16 FATAL_ERROR)
 
 # Nome da simulação
-project(RPCSimulation)
+project(KODELESimulation)
 
 # Pacotes necessários. UI_All para user interface e VIS_ALL para visualização
 find_package(Geant4 REQUIRED ui_all vis_all)
@@ -16,10 +16,10 @@ file(GLOB sources ${PROJECT_SOURCE_DIR}/src/*.cc)
 file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.hh)
 
 # Cria executável a partir do arquivo principal
-add_executable(RPCSimulation RPCSimulation.cc ${sources} ${headers})
+add_executable(KODELESimulation KODELESimulation.cc ${sources} ${headers})
 
 # Linka libraries para o executável
-target_link_libraries(RPCSimulation ${Geant4_LIBRARIES})
+target_link_libraries(KODELESimulation ${Geant4_LIBRARIES})
 
 # Copia todos os arquivos de macro para o diretório da build
 file(GLOB MACRO_FILES "*.mac")
@@ -30,4 +30,4 @@ file(GLOB DATA_FILES "*.dat")
 file(COPY ${DATA_FILES} DESTINATION ${PROJECT_BINARY_DIR})
 
 # O projeto depende do executável
-add_custom_target(Simulation DEPENDS RPCSimulation)
+add_custom_target(Simulation DEPENDS KODELESimulation)

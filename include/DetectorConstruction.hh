@@ -6,6 +6,8 @@
 #include <G4UserLimits.hh>
 #include <G4FieldManager.hh>
 #include <G4ElectricField.hh>
+#include <G4PhysicalVolumeStore.hh>
+#include <map>
 #include "DetectorConstructionMessenger.hh"
 #include "SensitiveDetector.hh"
 
@@ -44,35 +46,28 @@ public:
 	G4Material* CMSMixtureMaterial;
 
 	G4UserLimits* WorldUserLimits;
-	G4UserLimits* BakeliteUserLimits;
-	G4UserLimits* GraphiteUserLimits;
-	G4UserLimits* PolyethyleneUserLimits;
-	G4UserLimits* GasUserLimits;
-	G4UserLimits* AluminiumUserLimits;
 
 	DataHandler* dataHandler;
 private:
 	G4LogicalVolume*   WorldLogicalVolume;
-	G4VPhysicalVolume* WorldPhysicalVolume;
-
-	G4LogicalVolume*   BakeliteLogicalVolume;
-	G4VPhysicalVolume* BakelitePhysicalVolume;
-
-	G4LogicalVolume*   GraphiteLogicalVolume;
-	G4VPhysicalVolume* GraphitePhysicalVolume;
-
+	G4LogicalVolume*   CooperFoilLogicalVolume;
 	G4LogicalVolume*   PolyethyleneLogicalVolume;
-	G4VPhysicalVolume* PolyethylenePhysicalVolume;
-
-	G4LogicalVolume*   GasLogicalVolume;
-	G4VPhysicalVolume* GasPhysicalVolume;
-	
-	G4LogicalVolume*   AluminiumLogicalVolume;
-	G4VPhysicalVolume* AluminiumPhysicalVolume;
+	G4LogicalVolume*   GraphiteLogicalVolume;
+	G4LogicalVolume*   BakeliteLogicalVolume;
+	G4LogicalVolume*   GasLogicalVolumePos;
+	G4LogicalVolume*   GasLogicalVolumeNeg;
+	G4LogicalVolume*   AirLogicalVolume;
+	G4LogicalVolume*   CooperStripLogicalVolume;
 	
 	DetectorConstructionMessenger* detectorConstructionMessenger;
 
 	SensitiveDetector* sensitiveDetector;
+
+	struct Layer {
+		G4LogicalVolume* logic;
+		G4String name;
+		G4double thickness;
+	};
 
 	void ConstructElectricField();
 	void CreateChordFinder(G4FieldManager*, G4ElectricField*);
