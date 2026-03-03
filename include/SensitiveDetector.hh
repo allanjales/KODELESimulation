@@ -4,6 +4,8 @@
 #include "G4VSensitiveDetector.hh"
 #include "DataHandler.hh"
 
+#include <G4Electron.hh>
+
 class SensitiveDetector : public G4VSensitiveDetector
 {
 public:

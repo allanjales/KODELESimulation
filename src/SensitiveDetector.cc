@@ -9,19 +9,22 @@ SensitiveDetector::~SensitiveDetector()
 
 G4bool SensitiveDetector::ProcessHits(G4Step *aStep, G4TouchableHistory *ROhist)
 {
-	// G4double edep = aStep->GetTotalEnergyDeposit();
-	// if(edep == 0.) return false;
-	// G4cout << "Energy deposited: " << edep << G4endl;
-	
 	G4ParticleDefinition* particle = aStep->GetTrack()->GetDefinition();
-	if (particle->GetParticleType() != "lepton" && particle->GetParticleType() != "gamma")
+	if (aStep->GetTrack()->GetDefinition() == G4Electron::Electron())
 	{
-		G4cout << "Particle Type: " << particle->GetParticleType() << "\n";
-		G4cout << particle->GetParticleName() << " | " << particle->GetPDGEncoding() << "\n";
+		auto touchable = aStep->GetPreStepPoint()->GetTouchableHandle();
+		G4String volumeName = touchable->GetVolume()->GetName();
+
+		int regionID = -1;
+		
+		if (volumeName == "GasGapPos")
+			regionID = 0;
+		else if (volumeName == "GasGapNeg")
+			regionID = 1;
+
+		dataHandler->FillData(aStep, regionID);
+		aStep->GetTrack()->SetTrackStatus(fStopAndKill);
 	}
-	
-	// Store info
-	dataHandler->FillData(aStep, 0);
 
 	return true;
 }

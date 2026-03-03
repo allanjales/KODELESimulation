@@ -8,6 +8,7 @@
 /vis/scene/add/trajectories smooth
 /vis/scene/add/eventID
 /vis/scene/endOfEventAction accumulate 1000
+/vis/set/extentForField 0 0.1 -1 1 -1 1 cm
 
 /gun/energy 1 GeV
 /gun/particle mu+
