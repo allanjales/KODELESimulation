@@ -98,7 +98,7 @@ G4VPhysicalVolume *DetectorConstruction::Construct()
 	CooperFoilLogicalVolume = new G4LogicalVolume(CooperFoilSolidVolume, CooperMaterial, "CooperFoilLogicalVolume", 0, 0, 0);
 	{
 		auto attr = new G4VisAttributes(G4Colour(.0,.5,0.));
-		attr->SetForceSolid();
+		attr->SetForceWireframe();
 		CooperFoilLogicalVolume->SetVisAttributes(attr);
 	}
 
@@ -150,14 +150,14 @@ G4VPhysicalVolume *DetectorConstruction::Construct()
 	}
 	
 	// Cooper Strips
-	double stripPitch = 3*cm;
-	auto CooperStripSolidVolume = new G4Box("CooperStripSolidVolume", width/2, stripPitch/2, 0.5*mm);
+	double stripPitch = 2070.25/50/16*cm;
+	auto CooperStripSolidVolume = new G4Box("CooperStripSolidVolume", width/2, stripPitch/2, 0.4*mm);
 	CooperStripLogicalVolume = new G4LogicalVolume(CooperStripSolidVolume, CooperMaterial, "CooperStripLogicalVolume", 0, 0, 0);
 	{
 		auto attr = new G4VisAttributes(G4Colour(.9,.9,.1));
 		attr->SetForceSolid();
 		CooperStripLogicalVolume->SetVisAttributes(attr);
-	}	
+	}
 
 	// ----------------
 	// Placing
@@ -238,13 +238,6 @@ void DetectorConstruction::ConstructElectricField()
 	localPosFieldManager->SetDetectorField(localPosField);
 	CreateChordFinder(localPosFieldManager, localPosField);
 	GasLogicalVolumePos->SetFieldManager(localPosFieldManager, true);
-
-	// Set local eletric positive field
-	G4UniformElectricField* localNegField = new G4UniformElectricField(G4ThreeVector(0., 0., 4.5*kilovolt/mm));
-	G4FieldManager* localNegFieldManager = new G4FieldManager();
-	localNegFieldManager->SetDetectorField(localNegField);
-	CreateChordFinder(localNegFieldManager, localNegField);
-	GasLogicalVolumeNeg->SetFieldManager(localNegFieldManager, true);
 }
 
 void DetectorConstruction::CreateChordFinder(G4FieldManager* fieldManager, G4ElectricField* field)

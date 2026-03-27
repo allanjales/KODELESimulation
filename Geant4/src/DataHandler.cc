@@ -22,15 +22,10 @@ DataHandler::DataHandler()
 	analysisManager->CreateNtupleDColumn("PositionY");
 	analysisManager->CreateNtupleDColumn("PositionZ");
 
-	analysisManager->CreateNtupleDColumn("KinectEnergy");
-	analysisManager->CreateNtupleDColumn("TotalEnergy");
-	analysisManager->CreateNtupleDColumn("Theta");
-	analysisManager->CreateNtupleDColumn("Phi");
 	analysisManager->CreateNtupleDColumn("Momentum");
-
-	analysisManager->CreateNtupleDColumn("Pt");
-	analysisManager->CreateNtupleDColumn("Eta");
-	analysisManager->CreateNtupleDColumn("CosTheta");
+	analysisManager->CreateNtupleDColumn("MomentumDirX");
+	analysisManager->CreateNtupleDColumn("MomentumDirY");
+	analysisManager->CreateNtupleDColumn("MomentumDirZ");
 
 	analysisManager->FinishNtuple();
 }
@@ -67,7 +62,6 @@ void DataHandler::FillData(const G4Step* aStep, G4int regionID)
 	G4Track* aTrack = aStep->GetTrack();
 	G4ParticleDefinition* particle = aTrack->GetDynamicParticle()->GetDefinition();
 	G4ThreeVector position = aTrack->GetPosition();
-	G4ThreeVector momentum = aTrack->GetMomentum();
 
 	int i = 0;
 	analysisManager->FillNtupleIColumn(i++, particle->GetPDGEncoding()); // PDG particle ID
@@ -85,15 +79,10 @@ void DataHandler::FillData(const G4Step* aStep, G4int regionID)
 	analysisManager->FillNtupleDColumn(i++, position.y()); // mm
 	analysisManager->FillNtupleDColumn(i++, position.z()); // mm
 
-	analysisManager->FillNtupleDColumn(i++, aTrack->GetKineticEnergy()); // MeV
-	analysisManager->FillNtupleDColumn(i++, aTrack->GetTotalEnergy()); // MeV
-	analysisManager->FillNtupleDColumn(i++, aTrack->GetMomentumDirection().theta()); // rad
-	analysisManager->FillNtupleDColumn(i++, aTrack->GetMomentumDirection().phi()); // rad
-	analysisManager->FillNtupleDColumn(i++, momentum.mag()); // MeV/c
-	
-	analysisManager->FillNtupleDColumn(i++, sqrt(momentum.x()*momentum.x() + momentum.y()*momentum.y())); // MeV/c
-	analysisManager->FillNtupleDColumn(i++, -log(tan(aTrack->GetMomentumDirection().theta()/2.)));
-	analysisManager->FillNtupleDColumn(i++, cos(aTrack->GetMomentumDirection().theta()));
+	analysisManager->FillNtupleDColumn(i++, aTrack->GetMomentum().mag()); // MeV
+	analysisManager->FillNtupleDColumn(i++, aTrack->GetMomentumDirection().x());
+	analysisManager->FillNtupleDColumn(i++, aTrack->GetMomentumDirection().y());
+	analysisManager->FillNtupleDColumn(i++, aTrack->GetMomentumDirection().z());
 
 	analysisManager->AddNtupleRow();
 }

@@ -1,8 +1,8 @@
 # Ignora a pasta de build
-build/*
+**/build/
 
 # Ignora a pasta de build multi-thread
-buildmt/*
+**/buildmt/
 
 # Ignora resultados e qualquer imagem ou pdf
 *.root
@@ -10,7 +10,7 @@ buildmt/*
 *.pdf
 
 # Ignora arquivos do vscode
-.vscode/*
+.vscode/
 
 # Ignora checkpoints dos jupyter notebook
 .ipynb_checkpoints/
