@@ -19,6 +19,9 @@ public:
 
 protected:
 	void SetCuts();
+
+private:
+	void AddPAIModel(const G4String& modname);
 };
 
 #endif
