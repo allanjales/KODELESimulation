@@ -32,9 +32,10 @@
 #include "utils/Layer.hh"
 // #include "utils/Vectors4D.hh"
 #include "utils/Vectors3D.hh"
-// #include "utils/TimeWindow.hh"
+#include "utils/TimeWindow.hh"
 // #include "utils/Helpers.hh"
 #include "utils/Units.hh"
+#include "utils/StopWatch.hh"
 
 #include "TCanvas.h"
 
@@ -45,6 +46,7 @@ class ParallelPlate3D
 protected:
 	// Geometry and components
 	GeometrySimple geometry;
+	ComponentConstant geomAnchor;
 	ComponentUser eField;
 	ComponentUser wField;
 	Sensor sensor;
@@ -83,8 +85,9 @@ public:
 	ParallelPlate3D();
 	~ParallelPlate3D();
 
-	void SetGasFile(const std::string& path) { gasFilePath = path; }
+	TimeWindow signalTimeWindow;
 
+	void SetGasFile(const std::string& path) { gasFilePath = path; }
 	void Setup(const std::vector<Layer>& detectorLayers, double voltage_cm, double width, double height);
 
 	void Simulate();
@@ -99,7 +102,7 @@ public:
 	void PlotWeightingFieldProfile();
 
 	// Debug
-	void PrintDebugGasAtPoint(double x, double y, double z);
+	void PrintDebugAtPoint(double x, double y, double z);
 	void EnableClustersPrintDebug() { shouldDebugClusters = true; };
 	void DisableClustersPrintDebug() { shouldDebugClusters = false; };
 };

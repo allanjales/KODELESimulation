@@ -14,12 +14,12 @@
 
 // Time
 #define ns 1. // default
-#define us 1e3
-#define ms 1e6
-#define s  1e9
+#define us 1.e3
+#define ms 1.e6
+#define s  1.e9
 
 // electron-volt
 #define eV 1. // default
-#define keV 1e3
-#define MeV 1e6
-#define GeV 1e9
+#define keV 1.e3
+#define MeV 1.e6
+#define GeV 1.e9

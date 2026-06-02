@@ -82,6 +82,8 @@ int main(int argc, char* argv[])
 	double electricField = 4.5 * kV/mm;
 	rpc.Setup(detectorStack, electricField, width, height);
 	DEBUGLOG("Detector setup complete.");
+	rpc.signalTimeWindow.Set(0.*ns, 20*ns, 1000);
+	// rpc.View3D();
 	rpc.PlotElectricFieldProfile();
 	rpc.PlotWeightingFieldProfile();
 	rpc.PlotDriftLines2D();
@@ -89,7 +91,6 @@ int main(int argc, char* argv[])
 	rpc.EnableClustersPrintDebug();
 	rpc.Simulate();
 	DEBUGLOG("Simulation complete.");
-	// rpc.View3D();
 	
 	DEBUGLOG("End of program.");
 	app.Run(true);
