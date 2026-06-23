@@ -19,7 +19,5 @@ add_executable(KODELE KODELE.cc ${sources} ${headers})
 target_link_libraries(KODELE Garfield::Garfield)
 
 # ---Copy all files locally to the build directory-------------------------------
-foreach(_file cms_rpc_95.2_4.5_0.3_25-40kV.gas)
-	configure_file(${_file} ${_file} COPYONLY)
-endforeach()
-
+file(GLOB GAS_FILES "*.gas")
+file(COPY ${GAS_FILES} DESTINATION ${PROJECT_BINARY_DIR})

@@ -12,6 +12,16 @@ using namespace std;
 #include <chrono>
 using namespace chrono;
 
+#include <sstream>
+#include <iomanip>
+
+// Enum para controlar o nível de precisão desejado na string
+enum class TimePrecision {
+	Seconds,
+	Milliseconds,
+	Microseconds
+};
+
 class StopWatch
 {
 private:
@@ -34,7 +44,8 @@ public:
 	/// @brief Stops the timer.
 	void Stop();
 
-	string TimeElapsedString();
+	string TimeElapsedStringClassic();
+	string TimeElapsedString(TimePrecision precision);
 };
 
 inline StopWatch::StopWatch()
@@ -60,23 +71,89 @@ inline void StopWatch::Stop()
 
 /// @brief Retrieves the current elapsed time as a string, automatically selecting the most appropriate units.
 /// @return A string representing the elapsed time.
-inline string StopWatch::TimeElapsedString()
+inline std::string StopWatch::TimeElapsedString(TimePrecision precision = TimePrecision::Microseconds)
+{
+	// Se não foi parado, o tempo decorrido é do início até agora
+	if (!hasStoppedTimer)
+		end = clock::now();
+
+	auto elapsed = end - begin;
+
+	// Extrai cada unidade de forma independente usando duration_cast a partir do total
+	auto h  = std::chrono::duration_cast<std::chrono::hours>(elapsed);
+	auto m  = std::chrono::duration_cast<std::chrono::minutes>(elapsed % std::chrono::hours(1));
+	auto s  = std::chrono::duration_cast<std::chrono::seconds>(elapsed % std::chrono::minutes(1));
+
+	std::ostringstream oss;
+
+	// Formato base: HH:MM:SS (sempre com 2 dígitos e preenchido com zeros)
+	oss << std::setfill('0') 
+		<< std::setw(2) << h.count() << ":"
+		<< std::setw(2) << m.count() << ":"
+		<< std::setw(2) << s.count();
+
+	// Adiciona as frações dependendo da precisão solicitada
+	if (precision == TimePrecision::Milliseconds) 
+	{
+		auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed % std::chrono::seconds(1));
+		oss << "." << std::setfill('0') << std::setw(3) << ms.count();
+	} 
+	else if (precision == TimePrecision::Microseconds) 
+	{
+		auto us = std::chrono::duration_cast<std::chrono::microseconds>(elapsed % std::chrono::seconds(1));
+		oss << "." << std::setfill('0') << std::setw(6) << us.count();
+	}
+
+	return oss.str();
+}
+
+
+inline string StopWatch::TimeElapsedStringClassic()
 {
 	// If wasn't stopped, then elapsed time is from begin to now
 	if (!hasStoppedTimer)
 		end = clock::now();
 	
 	duration elapsed = end - begin;
-	string unit = " ticks";
-
-	if (duration_cast<nanoseconds>(elapsed).count() < 1e3)
-		return to_string(duration_cast<nanoseconds>(elapsed).count()) + " nanoseconds";
-	if (duration_cast<microseconds>(elapsed).count() < 1e3)
-		return to_string(duration_cast<microseconds>(elapsed).count()) + " microseconds";
-	if (duration_cast<milliseconds>(elapsed).count() < 1e3)
-		return to_string(duration_cast<milliseconds>(elapsed).count()) + " milliseconds";
-	if (duration_cast<seconds>(elapsed).count() < 60)
-		return to_string(duration_cast<seconds>(elapsed).count()) + " seconds";
 	
-	return to_string(chrono::duration_cast<chrono::minutes>(end - begin).count()) + " minutes";
+	// Extract each unit and subtract from the remaining time
+	auto h  = chrono::duration_cast<chrono::hours>(elapsed);
+	elapsed -= h;
+	auto m  = chrono::duration_cast<chrono::minutes>(elapsed);
+	elapsed -= m;
+	auto s  = chrono::duration_cast<chrono::seconds>(elapsed);
+	elapsed -= s;
+	auto ms = chrono::duration_cast<chrono::milliseconds>(elapsed);
+	elapsed -= ms;
+	auto us = chrono::duration_cast<chrono::microseconds>(elapsed);
+	elapsed -= us;
+	auto ns = chrono::duration_cast<chrono::nanoseconds>(elapsed);
+
+	ostringstream oss;
+	bool hasPrintedLargerUnit = false;
+
+	// [&] capture all variables in this scope by reference
+	auto printUnit = [&](auto value, const char* unit) 
+	{
+		if (hasPrintedLargerUnit)
+			oss << " ";
+
+		if (value > 0 || hasPrintedLargerUnit) 
+		{
+			oss << value << unit;
+			hasPrintedLargerUnit = true;
+		}
+	};
+
+	// Try to print units from largest to smallest
+	printUnit(h.count(),  " h");
+	printUnit(m.count(),  " min");
+	printUnit(s.count(),  " s");
+	printUnit(ms.count(), " ms");
+	if (ms.count() <= 0)
+		printUnit(us.count(), " us");
+	if (us.count() <= 0)
+		printUnit(ns.count(), " ns");
+	
+	return oss.str();
 }

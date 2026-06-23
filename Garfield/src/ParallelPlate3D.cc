@@ -9,6 +9,30 @@ ParallelPlate3D::ParallelPlate3D()
 ParallelPlate3D::~ParallelPlate3D()
 {}
 
+std::tuple<double, double, double> ParallelPlate3D::ElectricField(const double x, const double y, const double z)
+{
+	double ez = (z > 0) ? this->electricField : -this->electricField;
+	return {0., 0., ez};
+}
+
+std::tuple<double, double, double> ParallelPlate3D::WeightingField(const double x, const double y, const double z)
+{
+	double halfStack = this->stackSize / 2.0;
+	double wz = (z > 0) ? (1.0 / halfStack) : (-1.0 / halfStack);
+	return {0., 0., wz};
+}
+
+double ParallelPlate3D::WeightingPotentialField(const double x, const double y, const double z)
+{
+	double halfStack = this->stackSize / 2.0;
+
+	// Outside the stack
+	if (std::abs(z) > halfStack)
+		return 0.;
+
+	return 1. - std::abs(z) / halfStack;
+}
+
 void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double electricField, double width, double height)
 {
 	OnPrepareBegin();
@@ -17,23 +41,25 @@ void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double ele
 	// Geometry
 	// ---------------------
 
-	detectorWidth  = width;
-	detectorHeight = height;
+	this->detectorWidth  = width;
+	this->detectorHeight = height;
+	this->detectorLayers = detectorLayers;
+	this->electricField = electricField;
 
 	// Compute total stack thickness and accumulate gas gap thickness
-	stackSize = 0.;
+	this->stackSize = 0.;
 	double totalGasThickness = 0.;
 	for (const auto& layer : detectorLayers)
 	{
-		stackSize += layer.thickness;
+		this->stackSize += layer.thickness;
 
 		if (dynamic_cast<MediumMagboltz*>(layer.medium))
 			totalGasThickness += layer.thickness;
 	}
 	printf("-------------------------------\n");
-	printf("Stack size:          %.1f mm\n", stackSize / mm);
-	printf("Total gas thickness: %.1f mm\n", totalGasThickness / mm);
-	printf("Electric field:      %.1f kV/mm\n", electricField / (kV/mm));
+	printf("Stack size:          %.2f mm\n", stackSize / mm);
+	printf("Total gas thickness: %.2f mm\n", totalGasThickness / mm);
+	printf("Electric field:      %.2f kV/mm\n", electricField / (kV/mm));
 
 	// Ignore if the is no gas
 	if (totalGasThickness <= 0.)
@@ -60,41 +86,34 @@ void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double ele
 	// Fields & Sensor
 	// ---------------------
 
-	auto eLinear = [electricField](const double x, const double y, const double z, double& ex, double& ey, double &ez)
+	auto electricFieldLambda = [this](const double x, const double y, const double z, double& ex, double& ey, double &ez)
 	{
-		ex = ey = 0.;
-		ez = (z > 0) ? electricField : -electricField;
+		auto [cx, cy, cz] = this->ElectricField(x, y, z);
+		ex = cx;
+		ey = cy;
+		ez = cz;
 	};
 
 	eField.SetGeometry(&geometry);
-	eField.SetElectricField(eLinear);
+	eField.SetElectricField(electricFieldLambda);
 
-	// Campo e Potencial de Peso
-	auto wFieldLambda = [this](const double x, const double y, const double z, double& wx, double& wy, double& wz)
+	auto weigthtingFieldLambda = [this](const double x, const double y, const double z, double& wx, double& wy, double &wz)
 	{
-		wx = wy = 0.;
-		double halfStack = stackSize / 2.0;
-		wz = (z > 0) ? (1.0 / halfStack) : (-1.0 / halfStack);
+		auto [cx, cy, cz] = this->WeightingField(x, y, z);
+		wx = cx;
+		wy = cy;
+		wz = cz;
 	};
 
-	auto wPotLambda = [this](const double x, const double y, const double z) -> double
+	auto weigthtingPotentialFieldLambda = [this](const double x, const double y, const double z) -> double
 	{
-		double halfStack = stackSize / 2.0;
-		return 1.0 - std::abs(z) / halfStack;
+		return this->WeightingPotentialField(x, y, z);
 	};
 
 	wField.SetGeometry(&geometry);
-	wField.SetWeightingField(wFieldLambda, "ReadoutPlane");
-	wField.SetWeightingPotential(wPotLambda, "ReadoutPlane");
+	wField.SetWeightingField(weigthtingFieldLambda, "ReadoutPlane");
+	wField.SetWeightingPotential(weigthtingPotentialFieldLambda, "ReadoutPlane");
 
-	// Sometimes ComponentUser is ignored in search of medium materials
-	// Geometry Anchor is a dummy componet that hold visible heed geometry
-	// Without it, it cannot create a track
-	geomAnchor.SetGeometry(&geometry);
-	geomAnchor.SetElectricField(0., 0., 0.);
-
-	// Must be in this order. The last component stands!
-	sensor.AddComponent(&geomAnchor);
 	sensor.AddComponent(&eField);
 	sensor.AddElectrode(&wField, "ReadoutPlane");
 
@@ -116,9 +135,9 @@ void ParallelPlate3D::Simulate()
 	OnSimulateBegin();
 
 	track.SetSensor(&sensor);
-	track.SetParticle("mu-");
+	track.SetParticle("e-");
 	track.SetMomentum(100*GeV);
-	track.CrossInactiveMedia(true);
+	track.CrossInactiveMedia(true); // Some Garfield++ version does not has this
 	
 	// Start the track just inside the top gas gap, travelling in the -z direction
 	// Hardcoded for a while
@@ -129,22 +148,21 @@ void ParallelPlate3D::Simulate()
 
 	avalanche.UseWeightingPotential();
 	avalanche.SetSensor(&sensor);
-	avalanche.SetTimeWindow(0., 50.); // up to 50 ns
+	avalanche.SetTimeWindow(0.*ns, 1*ns);
 	avalanche.EnableSignalCalculation();
-	avalanche.EnableAvalancheSizeLimit(100); // Heinrich tip
-	// avalanche.EnableIonisationMarkers(false);  // Dont show new excitation points in drift view
+	avalanche.EnableExcitationMarkers(false);
 	
 	// AvalancheGrid for the macroscopic drift/multiplication stage.
-	AvalancheGrid avalgrid(&sensor);
-	const int nxBins = 500;
-	const int nyBins = 500;
-	const int nzBins = 500;
+	const int nxBins = 5;
+	const int nyBins = 5;
+	const int nzBins = int(stackSize / (1.e-3*cm));
 	avalgrid.SetGrid(
-		-detectorWidth  / 2., +detectorWidth  / 2., nxBins,
-		-detectorHeight / 2., +detectorHeight / 2., nyBins,
-		-stackSize      / 2., +stackSize      / 2., nzBins
+		-0.05*cm, +0.05*cm, nxBins,
+		-0.05*cm, +0.05*cm, nyBins,
+		-stackSize / 2., +stackSize / 2., nzBins
 	);
 	avalgrid.SetSensor(&sensor);
+	// avalgrid.EnableDebugging();
 
 	// Iterate over primary clusters produced by the muon track
 	StopWatch timer;
@@ -153,25 +171,26 @@ void ParallelPlate3D::Simulate()
 		if (shouldDebugClusters)
 			printf("[DEBUG] Cluster at (%+.3f, %+.3f, %+.3f) cm | ne = %zu\n", cluster.x/cm, cluster.y/cm, cluster.z/cm, cluster.electrons.size());
 
-		for (const auto& electron : cluster.electrons)
+		for (const auto& electron : cluster.electrons)    
 		{
-			// Calculates the avalanche in a microscopic level up to the limit set by EnableAvalancheSizeLimit()
+			// Calculates the avalanche in a microscopic level
 			if (shouldDebugClusters)
 				printf("[DEBUG]  Microscopic avalanche at (%+.3f, %+.3f, %+.3f) cm\n", electron.x/cm, electron.y/cm, electron.z/cm);
 			avalanche.AvalancheElectron(electron.x, electron.y, electron.z, electron.t, 0.1, 0., 0., 0.);
 			
 			// Transfer electrons to avalanche grid for calculating macroscopic avalanche
 			if (shouldDebugClusters)
-				printf("[DEBUG]  Transferred to macroscopic grid: ne = %zu\n", avalanche.GetElectrons().size());
+				printf("[DEBUG]   Transferred to macroscopic grid: ne = %zu\n", avalanche.GetElectrons().size());
 			avalgrid.AddElectrons(&avalanche);
 		}
 	}
-	std::cout << "[INFO] Microscopic part ended in " + timer.TimeElapsedString() + "\n";
+	std::cout << "[ParallelPlate3D] Avalanche Microscopic took " + timer.TimeElapsedString() + "\n";
+	printf("[ParallelPlate3D] Switching to grid-based avalanche method.\n");
 	
 	// Grid-based macroscopic avalanche
-	printf("Switching to grid-based avalanche method\n");
+	timer.Start();
 	avalgrid.StartGridAvalanche();
-	std::cout << "[INFO] Macroscopic part ended in " + timer.TimeElapsedString() + "\n";
+	std::cout << "[ParallelPlate3D] Avalanche Grid took " + timer.TimeElapsedString() + "\n";
 
 	// Plot drift lines if requested
 	if (plotDriftLines)
@@ -179,9 +198,7 @@ void ParallelPlate3D::Simulate()
 		auto* cDrift = new TCanvas("cDrift", "Drift Lines", 800, 800);
 		driftView.SetCanvas(cDrift);
 		driftView.Plot2d();
-		const std::string fname = "drift_lines.png";
-		cDrift->SaveAs(fname.c_str());
-		// std::cout << "[INFO] Saved drift lines plot: " << fname << "\n";
+		cDrift->SaveAs("drift_lines.png");
 	}
 
 	// Plot the signal on the single readout electrode
@@ -191,14 +208,12 @@ void ParallelPlate3D::Simulate()
 		signalView.SetCanvas(cSignal);
 		signalView.SetSensor(&sensor);
 		signalView.PlotSignal("ReadoutPlane");
-
-		const std::string fname = "signal_ReadoutPlane.png";
-		cSignal->SaveAs(fname.c_str());
-		// std::cout << "Saved signal plot: " << fname << "\n";
+		cSignal->SaveAs("signal_ReadoutPlane.png");
 	}
 
+    sensor.IntegrateSignal("ReadoutPlane");
 	double qTotal = sensor.GetTotalInducedCharge("ReadoutPlane");
-	std::cout << "[INFO] Total induced charge: " << qTotal << " fC\n";
+	std::cout << "[ParallelPlate3D] Total induced charge: " << qTotal << " fC\n";
 
 	OnSimulateEnd();
 }
@@ -207,9 +222,7 @@ void ParallelPlate3D::PlotElectricField2D()
 {
 	eFieldView.SetSensor(&sensor);
 	eFieldView.SetPlaneXZ();
-	eFieldView.SetArea(
-		-detectorWidth / 2., -stackSize / 2.,
-		+detectorWidth / 2., +stackSize / 2.);
+	eFieldView.SetArea(-detectorWidth / 2., -stackSize / 2., +detectorWidth / 2., +stackSize / 2.);
 	eFieldView.PlotContour("e");
 }
 
@@ -217,18 +230,18 @@ void ParallelPlate3D::PlotElectricFieldProfile()
 {
 	auto* ceProfile = new TCanvas("ceProfile", "E-Field Profile", 800, 800);
 	eFieldView.SetCanvas(ceProfile);
-	eFieldView.SetComponent(&eField);
+	// eFieldView.SetComponent(&eField);
+	eFieldView.SetSensor(&sensor);
 	eFieldView.PlotProfile(0., 0., -stackSize / 2., 0., 0., stackSize / 2, "ez");
-	ceProfile->Update();
 	ceProfile->SaveAs("efield_profile.png");
 }
 
 void ParallelPlate3D::PlotWeightingFieldProfile()
 {
 	auto* cwProfile = new TCanvas("cwProfile", "W-Field Profile", 800, 800);
-	eFieldView.SetCanvas(cwProfile);
-	eFieldView.SetSensor(&sensor);
-	eFieldView.PlotProfileWeightingField("ReadoutPlane", 0., 0., -stackSize / 2., 0., 0., stackSize / 2., "v");
+	wFieldView.SetCanvas(cwProfile);
+	wFieldView.SetSensor(&sensor);
+	wFieldView.PlotProfileWeightingField("ReadoutPlane", 0., 0., -stackSize / 2., 0., 0., stackSize / 2., "v");
 	cwProfile->SaveAs("wfield_profile.png");
 }
 
@@ -242,16 +255,9 @@ void ParallelPlate3D::PlotDriftLines2D()
 
 	driftView.SetPlaneXZ();
 
-	// Show only the top gas gap where the primary track starts
-	// Hardcoded offset for a while. Later I will automatize this.
-	const double zTop = stackSize / 2.
-	                  - 0.03 * mm
-	                  - 0.20 * mm
-	                  - 0.20 * mm
-	                  - 1.40 * mm;   // top face of top gas gap
-	const double zBot = zTop - 1.40 * mm; // bottom face of top gas gap
-
-	driftView.SetArea(-0.05 * cm, zBot, 0.05 * cm, zTop);
+	const double zTop = 0.373*cm;
+	const double zBot = 0.233*cm;
+	driftView.SetArea(-0.05*cm, zBot, 0.05*cm, zTop);
 
 	track.EnablePlotting(&driftView);
 	avalanche.EnablePlotting(&driftView);
@@ -333,7 +339,6 @@ void ParallelPlate3D::PrintDebugAtPoint(double x, double y, double z)
 	};
 
 	printDiagnostic("eField", eField);
-	printDiagnostic("geomAnchor", geomAnchor);
 	printDiagnostic("Sensor", sensor);
 
 	printf("---------------------------------------------\n");

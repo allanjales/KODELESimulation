@@ -4,22 +4,22 @@
 #pragma once
 
 // Length
-#define mm 0.1
-#define cm 1. // default
-#define m  100.
+constexpr double mm = 0.1;
+constexpr double cm = 1.; // default
+constexpr double m  = 100.;
 
 // Voltage
-#define V 1. // default
-#define kV 1e3
+constexpr double V  = 1.; // default
+constexpr double kV = 1e3;
 
 // Time
-#define ns 1. // default
-#define us 1.e3
-#define ms 1.e6
-#define s  1.e9
+constexpr double ns = 1.; // default
+constexpr double us = 1.e3;
+constexpr double ms = 1.e6;
+constexpr double s  = 1.e9;
 
 // electron-volt
-#define eV 1. // default
-#define keV 1.e3
-#define MeV 1.e6
-#define GeV 1.e9
+constexpr double eV  = 1.; // default
+constexpr double keV = 1.e3;
+constexpr double MeV = 1.e6;
+constexpr double GeV = 1.e9;

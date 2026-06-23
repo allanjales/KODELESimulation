@@ -21,7 +21,8 @@
 #include "Garfield/TrackHeed.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
 #include "Garfield/ViewGeometry.hh"
-#include "Garfield/AvalancheGrid.hh"
+// #include "Garfield/AvalancheGrid.hh"
+#include "AvalancheGrid.hh"
 
 #include "Garfield/ViewMedium.hh"
 #include "Garfield/MediumConductor.hh"
@@ -44,15 +45,22 @@ using namespace Garfield;
 class ParallelPlate3D
 {
 protected:
+	// Geometry settings
+	double stackSize = 0.;
+	double detectorWidth = 0.;
+	double detectorHeight = 0.;
+	std::vector<Layer> detectorLayers;
+	double electricField = 0.;
+
 	// Geometry and components
 	GeometrySimple geometry;
-	ComponentConstant geomAnchor;
 	ComponentUser eField;
 	ComponentUser wField;
 	Sensor sensor;
 
 	// Avalanche handlers
 	AvalancheMicroscopic avalanche;
+	AvalancheGrid avalgrid;
 	TrackHeed track;
 
 	// Plots and viewers
@@ -65,11 +73,6 @@ protected:
 	// Simulation status
 	bool plotDriftLines = false;
 	bool plotSignal = false;
-
-	// Geometry settings
-	double stackSize = 0.;
-	double detectorWidth = 0.;
-	double detectorHeight = 0.;
 
 	// Path to the .gas file
 	std::string gasFilePath = "";
@@ -89,6 +92,10 @@ public:
 
 	void SetGasFile(const std::string& path) { gasFilePath = path; }
 	void Setup(const std::vector<Layer>& detectorLayers, double voltage_cm, double width, double height);
+
+	std::tuple<double, double, double> ElectricField(const double x, const double y, const double z);
+	std::tuple<double, double, double> WeightingField(const double x, const double y, const double z);
+	double WeightingPotentialField(const double x, const double y, const double z);
 
 	void Simulate();
 
