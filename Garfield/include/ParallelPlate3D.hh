@@ -68,6 +68,7 @@ protected:
 	ViewField wFieldView;
 	ViewDrift driftView;
 	ViewSignal signalView;
+	ViewSignal chargeView;
 	ViewGeometry geometryView;
 
 	// Simulation status
@@ -92,6 +93,7 @@ public:
 
 	void SetGasFile(const std::string& path) { gasFilePath = path; }
 	void Setup(const std::vector<Layer>& detectorLayers, double voltage_cm, double width, double height);
+	void DepositCharges();
 
 	std::tuple<double, double, double> ElectricField(const double x, const double y, const double z);
 	std::tuple<double, double, double> WeightingField(const double x, const double y, const double z);

@@ -120,6 +120,19 @@ void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double ele
 	OnPrepareEnd();
 }
 
+void ParallelPlate3D::DepositCharges()
+{
+	track.SetParticle("e-");
+	track.SetMomentum(100*GeV);
+	
+	// Start the track just inside the top gas gap, travelling in the -z direction
+	// Hardcoded for a while
+	Vector3D startPos(0., 0., 0.372*cm);
+	printf("Starting track at (%+.3f, %+.3f, %+.3f) cm\n", startPos.x, startPos.y, startPos.z/cm);
+	track.NewTrack(startPos.x, startPos.y, startPos.z, 0., 0., 0., -1.);
+	PrintDebugAtPoint(startPos.x, startPos.y, startPos.z);
+}
+
 void ParallelPlate3D::Simulate()
 {
 	if (gasFilePath.empty())
@@ -135,16 +148,8 @@ void ParallelPlate3D::Simulate()
 	OnSimulateBegin();
 
 	track.SetSensor(&sensor);
-	track.SetParticle("e-");
-	track.SetMomentum(100*GeV);
 	track.CrossInactiveMedia(true); // Some Garfield++ version does not has this
-	
-	// Start the track just inside the top gas gap, travelling in the -z direction
-	// Hardcoded for a while
-	Vector3D startPos(0., 0., 0.372*cm);
-	printf("Starting track at (%+.3f, %+.3f, %+.3f) cm\n", startPos.x, startPos.y, startPos.z/cm);
-	track.NewTrack(startPos.x, startPos.y, startPos.z, 0., 0., 0., -1.);
-	PrintDebugAtPoint(startPos.x, startPos.y, startPos.z);
+	DepositCharges();
 
 	avalanche.UseWeightingPotential();
 	avalanche.SetSensor(&sensor);
@@ -153,12 +158,12 @@ void ParallelPlate3D::Simulate()
 	avalanche.EnableExcitationMarkers(false);
 	
 	// AvalancheGrid for the macroscopic drift/multiplication stage.
-	const int nxBins = 5;
-	const int nyBins = 5;
+	const int nxBins = int(stackSize / (1.e-3*cm));
+	const int nyBins = int(stackSize / (1.e-3*cm));
 	const int nzBins = int(stackSize / (1.e-3*cm));
 	avalgrid.SetGrid(
-		-0.05*cm, +0.05*cm, nxBins,
-		-0.05*cm, +0.05*cm, nyBins,
+		-stackSize / 2., +stackSize / 2., nxBins,
+		-stackSize / 2., +stackSize / 2., nyBins,
 		-stackSize / 2., +stackSize / 2., nzBins
 	);
 	avalgrid.SetSensor(&sensor);
@@ -209,6 +214,15 @@ void ParallelPlate3D::Simulate()
 		signalView.SetSensor(&sensor);
 		signalView.PlotSignal("ReadoutPlane");
 		cSignal->SaveAs("signal_ReadoutPlane.png");
+		sensor.ExportSignal("ReadoutPlane", "Signal");
+
+		sensor.IntegrateSignal("ReadoutPlane");
+		auto* cCharge = new TCanvas("cCharge", "Charge – readout plane", 800, 800);
+		chargeView.SetCanvas(cCharge);
+		chargeView.SetSensor(&sensor);
+		chargeView.PlotSignal("ReadoutPlane");
+		cCharge->SaveAs("charge_ReadoutPlane.png");
+		sensor.ExportSignal("ReadoutPlane", "Charge");
 	}
 
     sensor.IntegrateSignal("ReadoutPlane");
