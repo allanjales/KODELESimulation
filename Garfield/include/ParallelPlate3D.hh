@@ -44,6 +44,11 @@ using namespace Garfield;
 
 class ParallelPlate3D
 {
+private:
+	void setupGeometry();
+	void setupFieldsAndSensors();
+	void finishPlotsAndPrintTotalCharge();
+
 protected:
 	// Geometry settings
 	double stackSize = 0.;
@@ -51,12 +56,13 @@ protected:
 	double detectorHeight = 0.;
 	std::vector<Layer> detectorLayers;
 	double electricField = 0.;
-
+	
 	// Geometry and components
 	GeometrySimple geometry;
 	ComponentUser eField;
 	ComponentUser wField;
 	Sensor sensor;
+	string sensorLabel = "ReadoutPlane";
 
 	// Avalanche handlers
 	AvalancheMicroscopic avalanche;
@@ -75,15 +81,10 @@ protected:
 	bool plotDriftLines = false;
 	bool plotSignal = false;
 
-	// Path to the .gas file
-	std::string gasFilePath = "";
-
-	virtual void OnPrepareBegin()  {}
-	virtual void OnPrepareEnd()    {}
+	virtual void OnSetupBegin()  {}
+	virtual void OnSetupEnd()    {}
 	virtual void OnSimulateBegin() {}
 	virtual void OnSimulateEnd()   {}
-
-	bool shouldDebugClusters = false;
 
 public:
 	ParallelPlate3D();
@@ -91,15 +92,15 @@ public:
 
 	TimeWindow signalTimeWindow;
 
-	void SetGasFile(const std::string& path) { gasFilePath = path; }
 	void Setup(const std::vector<Layer>& detectorLayers, double voltage_cm, double width, double height);
-	void DepositCharges();
+	void DepositCharge(string particleName, double momentum, Vector3D startPos, Vector3D direction, double startTime, bool debug);
+	void DepositDebugCharge();
+	void Simulate();
 
+	// Fields definitions
 	std::tuple<double, double, double> ElectricField(const double x, const double y, const double z);
 	std::tuple<double, double, double> WeightingField(const double x, const double y, const double z);
 	double WeightingPotentialField(const double x, const double y, const double z);
-
-	void Simulate();
 
 	// Visualisation helpers
 	void PlotElectricFieldProfile();
@@ -112,6 +113,4 @@ public:
 
 	// Debug
 	void PrintDebugAtPoint(double x, double y, double z);
-	void EnableClustersPrintDebug() { shouldDebugClusters = true; };
-	void DisableClustersPrintDebug() { shouldDebugClusters = false; };
 };

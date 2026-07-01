@@ -33,19 +33,8 @@ double ParallelPlate3D::WeightingPotentialField(const double x, const double y, 
 	return 1. - std::abs(z) / halfStack;
 }
 
-void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double electricField, double width, double height)
+void ParallelPlate3D::setupGeometry()
 {
-	OnPrepareBegin();
-
-	// ---------------------
-	// Geometry
-	// ---------------------
-
-	this->detectorWidth  = width;
-	this->detectorHeight = height;
-	this->detectorLayers = detectorLayers;
-	this->electricField = electricField;
-
 	// Compute total stack thickness and accumulate gas gap thickness
 	this->stackSize = 0.;
 	double totalGasThickness = 0.;
@@ -58,15 +47,11 @@ void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double ele
 	}
 	printf("-------------------------------\n");
 	printf("Stack size:          %.2f mm\n", stackSize / mm);
-	printf("Total gas thickness: %.2f mm\n", totalGasThickness / mm);
 	printf("Electric field:      %.2f kV/mm\n", electricField / (kV/mm));
 
 	// Ignore if the is no gas
 	if (totalGasThickness <= 0.)
-	{
-		std::cerr << "[ParallelPlate3D] ERROR: no gas layer found in detector stack!\n";
-		return;
-	}
+		std::cerr << "[WARNING] No gas layer found in detector stack!\n";
 
 	// Place geometry solids from top to bottom
 	printf("Layers:\n");
@@ -76,16 +61,15 @@ void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double ele
 		currentZ -= layer.thickness;
 		double posZ = currentZ + layer.thickness / 2.0;
 
-		auto* solid = new SolidBox(0., 0., posZ, width / 2., height / 2., layer.thickness / 2.);
+		auto* solid = new SolidBox(0., 0., posZ, this->detectorWidth / 2., this->detectorHeight / 2., layer.thickness / 2.);
 		geometry.AddSolid(solid, layer.medium);
 		printf("z = (%+.3f, %+.3f) cm | %s\n", currentZ/cm, (currentZ/cm + layer.thickness/cm), layer.medium->GetName().c_str());
 	}
 	printf("-------------------------------\n");
+}
 
-	// ---------------------
-	// Fields & Sensor
-	// ---------------------
-
+void ParallelPlate3D::setupFieldsAndSensors()
+{
 	auto electricFieldLambda = [this](const double x, const double y, const double z, double& ex, double& ey, double &ez)
 	{
 		auto [cx, cy, cz] = this->ElectricField(x, y, z);
@@ -105,51 +89,79 @@ void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double ele
 		wz = cz;
 	};
 
+	wField.SetGeometry(&geometry);
+	wField.SetWeightingField(weigthtingFieldLambda, sensorLabel);
+
 	auto weigthtingPotentialFieldLambda = [this](const double x, const double y, const double z) -> double
 	{
 		return this->WeightingPotentialField(x, y, z);
 	};
 
-	wField.SetGeometry(&geometry);
-	wField.SetWeightingField(weigthtingFieldLambda, "ReadoutPlane");
-	wField.SetWeightingPotential(weigthtingPotentialFieldLambda, "ReadoutPlane");
+	wField.SetWeightingPotential(weigthtingPotentialFieldLambda, sensorLabel);
 
 	sensor.AddComponent(&eField);
-	sensor.AddElectrode(&wField, "ReadoutPlane");
+	sensor.AddElectrode(&wField, sensorLabel);
 
-	OnPrepareEnd();
+	track.SetSensor(&sensor);
+	track.CrossInactiveMedia(true); // Some Garfield++ version does not has this
 }
 
-void ParallelPlate3D::DepositCharges()
+/// @brief Sets up the parallel plate detector geometry, electric field, and sensor components.
+/// @param detectorLayers 
+/// @param electricField 
+/// @param width 
+/// @param height 
+void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double electricField, double width, double height)
 {
-	track.SetParticle("e-");
-	track.SetMomentum(100*GeV);
+	OnSetupBegin();
+
+	this->detectorWidth  = width;
+	this->detectorHeight = height;
+	this->detectorLayers = detectorLayers;
+	this->electricField = electricField;
 	
-	// Start the track just inside the top gas gap, travelling in the -z direction
-	// Hardcoded for a while
+	setupGeometry();
+	setupFieldsAndSensors();
+
+	OnSetupEnd();
+}
+
+/// @brief Deposits a charge in the detector by creating a new track for a particle
+/// @param particleName i.e. e-, mu+
+/// @param momentum by default in eV/c 
+/// @param startPos 3D vector (x, y, z) in cm by default
+/// @param direction 3D unitary vector (dx, dy, dz)
+/// @param startTime start time of the track in ns
+/// @param debug whether to print debug information at point
+void ParallelPlate3D::DepositCharge(string particleName, double momentum, Vector3D startPos, Vector3D direction, double startTime = 0., bool debug = false)
+{
+	track.SetParticle(particleName);
+	track.SetMomentum(momentum);
+
+	printf("Creating track at (%+.3f, %+.3f, %+.3f) cm at t = %+.3f ns pointing towards (%+.3f, %+.3f, %+.3f)\n",
+		startPos.x, startPos.y, startPos.z/cm, startTime, direction.x, direction.y, direction.z);
+	track.NewTrack(startPos.x, startPos.y, startPos.z, startTime, direction.x, direction.y, direction.z);
+
+	if (debug)
+		PrintDebugAtPoint(startPos.x, startPos.y, startPos.z);
+}
+
+void ParallelPlate3D::DepositDebugCharge()
+{
+	string particleName = "e-";
+	double momentum = 100*GeV;
 	Vector3D startPos(0., 0., 0.372*cm);
-	printf("Starting track at (%+.3f, %+.3f, %+.3f) cm\n", startPos.x, startPos.y, startPos.z/cm);
-	track.NewTrack(startPos.x, startPos.y, startPos.z, 0., 0., 0., -1.);
-	PrintDebugAtPoint(startPos.x, startPos.y, startPos.z);
+	Vector3D direction(0., 0., -1.);
+	DepositCharge(particleName, momentum, startPos, direction, 0., true);
 }
 
 void ParallelPlate3D::Simulate()
 {
-	if (gasFilePath.empty())
-	{
-		std::cerr << "[ParallelPlate3D] WARNING: no gas file set. "
-		          << "Call SetGasFile() before Simulate() to enable AvalancheGrid.\n";
-		return;
-	}
-
+	printf("-------Simulation Started--------\n");
 	sensor.ClearSignal();
 	sensor.SetTimeWindow(signalTimeWindow.GetMin(), signalTimeWindow.GetStep(), signalTimeWindow.GetnBins());
 
 	OnSimulateBegin();
-
-	track.SetSensor(&sensor);
-	track.CrossInactiveMedia(true); // Some Garfield++ version does not has this
-	DepositCharges();
 
 	avalanche.UseWeightingPotential();
 	avalanche.SetSensor(&sensor);
@@ -170,66 +182,67 @@ void ParallelPlate3D::Simulate()
 	// avalgrid.EnableDebugging();
 
 	// Iterate over primary clusters produced by the muon track
+	printf("Starting Avalanche Microscopic simulation...\n");
 	StopWatch timer;
 	for (const auto& cluster : track.GetClusters())
 	{
-		if (shouldDebugClusters)
-			printf("[DEBUG] Cluster at (%+.3f, %+.3f, %+.3f) cm | ne = %zu\n", cluster.x/cm, cluster.y/cm, cluster.z/cm, cluster.electrons.size());
-
 		for (const auto& electron : cluster.electrons)    
 		{
 			// Calculates the avalanche in a microscopic level
-			if (shouldDebugClusters)
-				printf("[DEBUG]  Microscopic avalanche at (%+.3f, %+.3f, %+.3f) cm\n", electron.x/cm, electron.y/cm, electron.z/cm);
 			avalanche.AvalancheElectron(electron.x, electron.y, electron.z, electron.t, 0.1, 0., 0., 0.);
 			
 			// Transfer electrons to avalanche grid for calculating macroscopic avalanche
-			if (shouldDebugClusters)
-				printf("[DEBUG]   Transferred to macroscopic grid: ne = %zu\n", avalanche.GetElectrons().size());
 			avalgrid.AddElectrons(&avalanche);
 		}
 	}
-	std::cout << "[ParallelPlate3D] Avalanche Microscopic took " + timer.TimeElapsedString() + "\n";
-	printf("[ParallelPlate3D] Switching to grid-based avalanche method.\n");
+	printf("Avalanche Microscopic finished. Took %s\n", timer.TimeElapsedString().c_str());
 	
 	// Grid-based macroscopic avalanche
 	timer.Start();
 	avalgrid.StartGridAvalanche();
-	std::cout << "[ParallelPlate3D] Avalanche Grid took " + timer.TimeElapsedString() + "\n";
+	printf("Avalanche Grid finished. Took %s\n", timer.TimeElapsedString().c_str());
 
+	finishPlotsAndPrintTotalCharge();
+
+	OnSimulateEnd();
+	printf("--------Simulation Ended--------\n");
+}
+
+void ParallelPlate3D::finishPlotsAndPrintTotalCharge()
+{
 	// Plot drift lines if requested
 	if (plotDriftLines)
 	{
-		auto* cDrift = new TCanvas("cDrift", "Drift Lines", 800, 800);
+		auto* cDrift = new TCanvas("cDrift", "Drift Lines Top", 800, 800);
 		driftView.SetCanvas(cDrift);
 		driftView.Plot2d();
-		cDrift->SaveAs("drift_lines.png");
+		cDrift->SaveAs("drift_lines_top.png");
 	}
 
 	// Plot the signal on the single readout electrode
 	if (plotSignal)
 	{
-		auto* cSignal = new TCanvas("cSignal", "Signal – readout plane", 800, 800);
+		auto* cSignal = new TCanvas("cSignal", "Signal - readout plane", 800, 800);
 		signalView.SetCanvas(cSignal);
 		signalView.SetSensor(&sensor);
-		signalView.PlotSignal("ReadoutPlane");
-		cSignal->SaveAs("signal_ReadoutPlane.png");
-		sensor.ExportSignal("ReadoutPlane", "Signal");
-
-		sensor.IntegrateSignal("ReadoutPlane");
-		auto* cCharge = new TCanvas("cCharge", "Charge – readout plane", 800, 800);
-		chargeView.SetCanvas(cCharge);
-		chargeView.SetSensor(&sensor);
-		chargeView.PlotSignal("ReadoutPlane");
-		cCharge->SaveAs("charge_ReadoutPlane.png");
-		sensor.ExportSignal("ReadoutPlane", "Charge");
+		signalView.PlotSignal(sensorLabel);
+		cSignal->SaveAs("signal.png");
+		sensor.ExportSignal(sensorLabel, "Signal");
 	}
 
-    sensor.IntegrateSignal("ReadoutPlane");
-	double qTotal = sensor.GetTotalInducedCharge("ReadoutPlane");
-	std::cout << "[ParallelPlate3D] Total induced charge: " << qTotal << " fC\n";
-
-	OnSimulateEnd();
+	sensor.IntegrateSignal(sensorLabel);
+	double qTotal = sensor.GetTotalInducedCharge(sensorLabel);
+	printf("Total induced charge: %.3f fC\n", qTotal);
+	
+	if (plotSignal)
+	{
+		auto* cCharge = new TCanvas("cCharge", "Charge - readout plane", 800, 800);
+		chargeView.SetCanvas(cCharge);
+		chargeView.SetSensor(&sensor);
+		chargeView.PlotSignal(sensorLabel);
+		cCharge->SaveAs("charge.png");
+		sensor.ExportSignal(sensorLabel, "Charge");
+	}
 }
 
 void ParallelPlate3D::PlotElectricField2D()
@@ -255,7 +268,7 @@ void ParallelPlate3D::PlotWeightingFieldProfile()
 	auto* cwProfile = new TCanvas("cwProfile", "W-Field Profile", 800, 800);
 	wFieldView.SetCanvas(cwProfile);
 	wFieldView.SetSensor(&sensor);
-	wFieldView.PlotProfileWeightingField("ReadoutPlane", 0., 0., -stackSize / 2., 0., 0., stackSize / 2., "v");
+	wFieldView.PlotProfileWeightingField(sensorLabel, 0., 0., -stackSize / 2., 0., 0., stackSize / 2., "v");
 	cwProfile->SaveAs("wfield_profile.png");
 }
 
@@ -263,16 +276,14 @@ void ParallelPlate3D::PlotDriftLines2D()
 {
 	if (stackSize <= 0.)
 	{
-		std::cerr << "[ParallelPlate3D] ERROR: call Setup() before PlotDriftLines2D().\n";
+		std::cerr << "[ERROR] Should call Setup() before this.\n";
 		return;
 	}
 
-	driftView.SetPlaneXZ();
-
 	const double zTop = 0.373*cm;
-	const double zBot = 0.233*cm;
-	driftView.SetArea(-0.05*cm, zBot, 0.05*cm, zTop);
-
+	const double zBot = -0.373*cm;
+	driftView.SetPlaneXZ();
+	driftView.SetArea(-0.10*cm, zBot, +0.10*cm, zTop);
 	track.EnablePlotting(&driftView);
 	avalanche.EnablePlotting(&driftView);
 

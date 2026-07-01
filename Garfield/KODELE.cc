@@ -76,21 +76,24 @@ int main(int argc, char* argv[])
 		{cooperMedium,       0.03*mm}
 	};
 
+	// RPC Setup
 	ParallelPlate3D rpc;
-	rpc.SetGasFile(gasFile);
-
-	double electricField = 4.5 * kV/mm;
+	double electricField = 5.0 * kV/mm;
 	rpc.Setup(detectorStack, electricField, width, height);
-	DEBUGLOG("Detector setup complete.");
-	rpc.signalTimeWindow.Set(0.*ns, 20*ns, 1000);
+	rpc.signalTimeWindow.Set(0.*ns, 15*ns, 1000);
+	DEBUGLOG("Detector setup completed.");
+
+	// RPC Viewing
 	// rpc.View3D();
-	rpc.PlotElectricFieldProfile();
-	rpc.PlotWeightingFieldProfile();
+	// rpc.PlotElectricFieldProfile();
+	// rpc.PlotWeightingFieldProfile();
 	rpc.PlotDriftLines2D();
 	rpc.PlotSignal();
-	rpc.EnableClustersPrintDebug();
+
+	// RPC Simulate
+	rpc.DepositDebugCharge();
 	rpc.Simulate();
-	DEBUGLOG("Simulation complete.");
+	DEBUGLOG("Simulation completed.");
 	
 	DEBUGLOG("End of program.");
 	app.Run(true);
