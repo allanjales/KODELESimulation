@@ -1,3 +1,5 @@
+// Modified from Garfield++ by Allan Jales
+
 #include "Garfield/AvalancheGrid.hh"
 
 #include <cmath>

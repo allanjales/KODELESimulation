@@ -1,4 +1,5 @@
 // Author: Allan Jales
+// Parallel Plate Chamber in 3D 
 
 #pragma once
 
@@ -7,6 +8,7 @@
 #include <string>
 #include <iostream>
 #include <algorithm>
+#include <filesystem>
 
 #include "Garfield/MediumGas.hh"
 #include "Garfield/GeometrySimple.hh"
@@ -21,7 +23,6 @@
 #include "Garfield/TrackHeed.hh"
 #include "Garfield/AvalancheMicroscopic.hh"
 #include "Garfield/ViewGeometry.hh"
-// #include "Garfield/AvalancheGrid.hh"
 #include "AvalancheGrid.hh"
 
 #include "Garfield/ViewMedium.hh"
@@ -31,12 +32,11 @@
 #include "Garfield/ViewSignal.hh"
 
 #include "utils/Layer.hh"
-// #include "utils/Vectors4D.hh"
 #include "utils/Vectors3D.hh"
 #include "utils/TimeWindow.hh"
-// #include "utils/Helpers.hh"
 #include "utils/Units.hh"
 #include "utils/StopWatch.hh"
+#include "utils/TrackSettings.hh"
 
 #include "TCanvas.h"
 
@@ -47,7 +47,11 @@ class ParallelPlate3D
 private:
 	void setupGeometry();
 	void setupFieldsAndSensors();
-	void finishPlotsAndPrintTotalCharge();
+	void finishPlotsAfterSimulation();
+	void clearPlotsBeforeSimulation();
+
+	void depositCharge(string particleName, double momentum, Vector3D startPos, Vector3D direction, double startTime, bool debug);
+	void depositCharge(TrackSettings trackSettings, bool debug);
 
 protected:
 	// Geometry settings
@@ -62,9 +66,12 @@ protected:
 	ComponentUser eField;
 	ComponentUser wField;
 	Sensor sensor;
+
 	string sensorLabel = "ReadoutPlane";
+	string otuputFolder = "results/";
 
 	// Avalanche handlers
+	std::vector<TrackSettings> tracks;
 	AvalancheMicroscopic avalanche;
 	AvalancheGrid avalgrid;
 	TrackHeed track;
@@ -80,6 +87,7 @@ protected:
 	// Simulation status
 	bool plotDriftLines = false;
 	bool plotSignal = false;
+	bool plotCharge = false;
 
 	virtual void OnSetupBegin()  {}
 	virtual void OnSetupEnd()    {}
@@ -92,9 +100,14 @@ public:
 
 	TimeWindow signalTimeWindow;
 
+	void SetOutputFolder(const std::string& folder) { otuputFolder = folder; }
+
 	void Setup(const std::vector<Layer>& detectorLayers, double voltage_cm, double width, double height);
-	void DepositCharge(string particleName, double momentum, Vector3D startPos, Vector3D direction, double startTime, bool debug);
-	void DepositDebugCharge();
+
+	void AddTrack(TrackSettings trackSettings) { tracks.push_back(trackSettings); }
+	void AddTrack(string particleName, double momentum, Vector3D startPos, Vector3D direction, double startTime);
+	void AddDebugTrack();
+
 	void Simulate();
 
 	// Fields definitions
@@ -109,6 +122,7 @@ public:
 	void View3D();
 	void PlotDriftVelocity();
 	void PlotSignal();
+	void PlotCharge();
 	void PlotWeightingFieldProfile();
 
 	// Debug

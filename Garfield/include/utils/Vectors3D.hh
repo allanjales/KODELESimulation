@@ -13,37 +13,23 @@ class Vector3D
 public:
 	double x, y, z;
 
-	Vector3D(double x, double y, double z)
-	{
-		this->x = x; this->y = y; this->z = z;
-	}
+	Vector3D(double x, double y, double z) { this->x = x; this->y = y; this->z = z; }
+	double Magnitude() const { return std::sqrt(x*x + y*y + z*z); }
 	
-	double Magnitude() const
+	Vector3D Normalize() const
 	{
-		return std::sqrt(x*x + y*y + z*z);
+		double magnitude = Magnitude();
+		if (magnitude == 0.) return Vector3D(0., 0., 0.);
+		return Vector3D(x / magnitude, y / magnitude, z / magnitude);
 	}
 
 	// Operators
 
-	Vector3D operator+(const Vector3D& other) const
-	{
-		return Vector3D(x + other.x, y + other.y, z + other.z);
-	}
+	Vector3D operator+(const Vector3D& other) const { return Vector3D(x + other.x, y + other.y, z + other.z); }
+	Vector3D operator-(const Vector3D& other) const { return Vector3D(x - other.x, y - other.y, z - other.z); }
 
-	Vector3D operator-(const Vector3D& other) const
-	{
-		return Vector3D(x - other.x, y - other.y, z - other.z);
-	}
-
-	Vector3D operator*(double scalar) const
-	{
-		return Vector3D(x * scalar, y * scalar, z * scalar);
-	}
-
-	Vector3D operator/(double scalar) const
-	{
-		return Vector3D(x / scalar, y / scalar, z / scalar);
-	}
+	Vector3D operator*(double scalar) const { return Vector3D(x * scalar, y * scalar, z * scalar); }
+	Vector3D operator/(double scalar) const { return Vector3D(x / scalar, y / scalar, z / scalar); }
 
 	Vector3D& operator*=(double scalar)
 	{

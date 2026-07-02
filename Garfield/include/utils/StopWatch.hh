@@ -44,7 +44,13 @@ public:
 	/// @brief Stops the timer.
 	void Stop();
 
+	/// @brief Retrieves the current elapsed time as a string in old way
+	/// @return A string representing the elapsed time.
 	string TimeElapsedStringClassic();
+
+	/// @brief Retrieves the current elapsed time as a string, automatically selecting the most appropriate units.
+	/// @param precision The desired precision for the output string (Seconds, Milliseconds, Microseconds).
+	/// @return A string representing the elapsed time.
 	string TimeElapsedString(TimePrecision precision);
 };
 
@@ -73,26 +79,26 @@ inline void StopWatch::Stop()
 /// @return A string representing the elapsed time.
 inline std::string StopWatch::TimeElapsedString(TimePrecision precision = TimePrecision::Microseconds)
 {
-	// Se não foi parado, o tempo decorrido é do início até agora
+	// If it was not stopped, the time elapsed is from the start to now
 	if (!hasStoppedTimer)
 		end = clock::now();
 
 	auto elapsed = end - begin;
 
-	// Extrai cada unidade de forma independente usando duration_cast a partir do total
-	auto h  = std::chrono::duration_cast<std::chrono::hours>(elapsed);
-	auto m  = std::chrono::duration_cast<std::chrono::minutes>(elapsed % std::chrono::hours(1));
-	auto s  = std::chrono::duration_cast<std::chrono::seconds>(elapsed % std::chrono::minutes(1));
+	// Extract each unit from the total elapsed time
+	auto h = std::chrono::duration_cast<std::chrono::hours>(elapsed);
+	auto m = std::chrono::duration_cast<std::chrono::minutes>(elapsed % std::chrono::hours(1));
+	auto s = std::chrono::duration_cast<std::chrono::seconds>(elapsed % std::chrono::minutes(1));
 
 	std::ostringstream oss;
 
-	// Formato base: HH:MM:SS (sempre com 2 dígitos e preenchido com zeros)
+	// Base format: HH:MM:SS (always with 2 digits and zero-padded)
 	oss << std::setfill('0') 
 		<< std::setw(2) << h.count() << ":"
 		<< std::setw(2) << m.count() << ":"
 		<< std::setw(2) << s.count();
 
-	// Adiciona as frações dependendo da precisão solicitada
+	// Adds fractions depending on the requested precision
 	if (precision == TimePrecision::Milliseconds) 
 	{
 		auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed % std::chrono::seconds(1));

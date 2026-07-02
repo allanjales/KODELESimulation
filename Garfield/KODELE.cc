@@ -4,7 +4,6 @@
 // !------------------------
 
 #include <TApplication.h>
-// #include <iostream>
 
 #include "ParallelPlate3D.hh"
 #include "utils/Units.hh"
@@ -40,7 +39,6 @@ int main(int argc, char* argv[])
 	// Load the gas file so that macroscopic transport coefficients
 	// (drift velocity, Townsend coefficient, etc.) are available for AvalancheGrid.
 	const std::string gasFile = "cms_rpc_95.2_4.5_0.3_25-40kV.gas";
-	// const std::string gasFile = "c2h2f4_ic4h10_sf6.gas";
 	MediumMagboltz* gasMedium = new MediumMagboltz();
 	if (!gasMedium->LoadGasFile(gasFile))
 	{
@@ -87,11 +85,14 @@ int main(int argc, char* argv[])
 	// rpc.View3D();
 	// rpc.PlotElectricFieldProfile();
 	// rpc.PlotWeightingFieldProfile();
-	rpc.PlotDriftLines2D();
+	// rpc.PlotDriftLines2D();
 	rpc.PlotSignal();
+	rpc.PlotCharge();
 
 	// RPC Simulate
-	rpc.DepositDebugCharge();
+	rpc.SetOutputFolder("results/");
+	rpc.AddTrack("e-", 100*GeV, Vector3D(0., 0., 0.372*cm), Vector3D(0., 0., -1.), 0.*ns);
+	rpc.AddTrack("e-", 100*GeV, Vector3D(0.5*mm, 0., 0.372*cm), Vector3D(-0.1, 0., -1.), 0.2*ns);
 	rpc.Simulate();
 	DEBUGLOG("Simulation completed.");
 	

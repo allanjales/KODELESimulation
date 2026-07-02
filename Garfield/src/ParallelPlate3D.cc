@@ -1,4 +1,5 @@
 // Author: Allan Jales
+// Parallel Plate Chamber in 3D 
 
 #include "ParallelPlate3D.hh"
 #define DEBUGLOG(x) std::cout << x << std::endl
@@ -133,10 +134,11 @@ void ParallelPlate3D::Setup(const std::vector<Layer>& detectorLayers, double ele
 /// @param direction 3D unitary vector (dx, dy, dz)
 /// @param startTime start time of the track in ns
 /// @param debug whether to print debug information at point
-void ParallelPlate3D::DepositCharge(string particleName, double momentum, Vector3D startPos, Vector3D direction, double startTime = 0., bool debug = false)
+void ParallelPlate3D::depositCharge(string particleName, double momentum, Vector3D startPos, Vector3D direction, double startTime = 0., bool debug = false)
 {
 	track.SetParticle(particleName);
 	track.SetMomentum(momentum);
+	direction = direction.Normalize();
 
 	printf("Creating track at (%+.3f, %+.3f, %+.3f) cm at t = %+.3f ns pointing towards (%+.3f, %+.3f, %+.3f)\n",
 		startPos.x, startPos.y, startPos.z/cm, startTime, direction.x, direction.y, direction.z);
@@ -146,13 +148,30 @@ void ParallelPlate3D::DepositCharge(string particleName, double momentum, Vector
 		PrintDebugAtPoint(startPos.x, startPos.y, startPos.z);
 }
 
-void ParallelPlate3D::DepositDebugCharge()
+void ParallelPlate3D::depositCharge(TrackSettings trackSettings, bool debug = false)
+{
+	depositCharge(trackSettings.particleName, trackSettings.momentum, trackSettings.startPos, trackSettings.direction, trackSettings.startTime, debug);
+}
+
+void ParallelPlate3D::AddDebugTrack()
 {
 	string particleName = "e-";
 	double momentum = 100*GeV;
 	Vector3D startPos(0., 0., 0.372*cm);
 	Vector3D direction(0., 0., -1.);
-	DepositCharge(particleName, momentum, startPos, direction, 0., true);
+	AddTrack(particleName, momentum, startPos, direction, 0.);
+}
+
+void ParallelPlate3D::AddTrack(string particleName, double momentum, Vector3D startPos, Vector3D direction, double startTime)
+{
+	TrackSettings trackSettings;
+	trackSettings.particleName = particleName;
+	trackSettings.momentum = momentum;
+	trackSettings.startPos = startPos;
+	trackSettings.direction = direction;
+	trackSettings.startTime = startTime;
+
+	AddTrack(trackSettings);
 }
 
 void ParallelPlate3D::Simulate()
@@ -161,6 +180,7 @@ void ParallelPlate3D::Simulate()
 	sensor.ClearSignal();
 	sensor.SetTimeWindow(signalTimeWindow.GetMin(), signalTimeWindow.GetStep(), signalTimeWindow.GetnBins());
 
+	clearPlotsBeforeSimulation();
 	OnSimulateBegin();
 
 	avalanche.UseWeightingPotential();
@@ -179,22 +199,29 @@ void ParallelPlate3D::Simulate()
 		-stackSize / 2., +stackSize / 2., nzBins
 	);
 	avalgrid.SetSensor(&sensor);
+	avalgrid.Reset();
 	// avalgrid.EnableDebugging();
 
 	// Iterate over primary clusters produced by the muon track
 	printf("Starting Avalanche Microscopic simulation...\n");
 	StopWatch timer;
-	for (const auto& cluster : track.GetClusters())
+
+	for (const auto& trackSettings : tracks)
 	{
-		for (const auto& electron : cluster.electrons)    
+		depositCharge(trackSettings, false);
+		for (const auto& cluster : track.GetClusters())
 		{
-			// Calculates the avalanche in a microscopic level
-			avalanche.AvalancheElectron(electron.x, electron.y, electron.z, electron.t, 0.1, 0., 0., 0.);
-			
-			// Transfer electrons to avalanche grid for calculating macroscopic avalanche
-			avalgrid.AddElectrons(&avalanche);
+			for (const auto& electron : cluster.electrons)    
+			{
+				// Calculates the avalanche in a microscopic level
+				avalanche.AvalancheElectron(electron.x, electron.y, electron.z, electron.t, 0.1, 0., 0., 0.);
+				
+				// Transfer electrons to avalanche grid for calculating macroscopic avalanche
+				avalgrid.AddElectrons(&avalanche);
+			}
 		}
 	}
+	tracks.clear();
 	printf("Avalanche Microscopic finished. Took %s\n", timer.TimeElapsedString().c_str());
 	
 	// Grid-based macroscopic avalanche
@@ -202,13 +229,23 @@ void ParallelPlate3D::Simulate()
 	avalgrid.StartGridAvalanche();
 	printf("Avalanche Grid finished. Took %s\n", timer.TimeElapsedString().c_str());
 
-	finishPlotsAndPrintTotalCharge();
+	finishPlotsAfterSimulation();
+
+	if (!sensor.IsIntegrated(sensorLabel))
+		sensor.IntegrateSignal(sensorLabel);
+	double qTotal = sensor.GetTotalInducedCharge(sensorLabel);
+	printf("Total induced charge: %.3f fC\n", qTotal);
 
 	OnSimulateEnd();
 	printf("--------Simulation Ended--------\n");
 }
 
-void ParallelPlate3D::finishPlotsAndPrintTotalCharge()
+void ParallelPlate3D::clearPlotsBeforeSimulation()
+{
+	if (plotDriftLines) { driftView.Clear(); }
+}
+
+void ParallelPlate3D::finishPlotsAfterSimulation()
 {
 	// Plot drift lines if requested
 	if (plotDriftLines)
@@ -216,7 +253,8 @@ void ParallelPlate3D::finishPlotsAndPrintTotalCharge()
 		auto* cDrift = new TCanvas("cDrift", "Drift Lines Top", 800, 800);
 		driftView.SetCanvas(cDrift);
 		driftView.Plot2d();
-		cDrift->SaveAs("drift_lines_top.png");
+		filesystem::create_directories(otuputFolder);
+		cDrift->SaveAs((otuputFolder + "drift_lines_top.png").c_str());
 	}
 
 	// Plot the signal on the single readout electrode
@@ -226,22 +264,21 @@ void ParallelPlate3D::finishPlotsAndPrintTotalCharge()
 		signalView.SetCanvas(cSignal);
 		signalView.SetSensor(&sensor);
 		signalView.PlotSignal(sensorLabel);
-		cSignal->SaveAs("signal.png");
-		sensor.ExportSignal(sensorLabel, "Signal");
+		filesystem::create_directories(otuputFolder);
+		cSignal->SaveAs((otuputFolder + "signal.png").c_str());
+		sensor.ExportSignal(sensorLabel, (otuputFolder + "Signal").c_str());
 	}
-
-	sensor.IntegrateSignal(sensorLabel);
-	double qTotal = sensor.GetTotalInducedCharge(sensorLabel);
-	printf("Total induced charge: %.3f fC\n", qTotal);
 	
-	if (plotSignal)
+	if (plotCharge)
 	{
+		sensor.IntegrateSignal(sensorLabel);
 		auto* cCharge = new TCanvas("cCharge", "Charge - readout plane", 800, 800);
 		chargeView.SetCanvas(cCharge);
 		chargeView.SetSensor(&sensor);
 		chargeView.PlotSignal(sensorLabel);
-		cCharge->SaveAs("charge.png");
-		sensor.ExportSignal(sensorLabel, "Charge");
+		filesystem::create_directories(otuputFolder);
+		cCharge->SaveAs((otuputFolder + "charge.png").c_str());
+		sensor.ExportSignal(sensorLabel, (otuputFolder + "Charge").c_str());
 	}
 }
 
@@ -260,7 +297,8 @@ void ParallelPlate3D::PlotElectricFieldProfile()
 	// eFieldView.SetComponent(&eField);
 	eFieldView.SetSensor(&sensor);
 	eFieldView.PlotProfile(0., 0., -stackSize / 2., 0., 0., stackSize / 2, "ez");
-	ceProfile->SaveAs("efield_profile.png");
+	filesystem::create_directories(otuputFolder);
+	ceProfile->SaveAs((otuputFolder + "efield_profile.png").c_str());
 }
 
 void ParallelPlate3D::PlotWeightingFieldProfile()
@@ -269,7 +307,8 @@ void ParallelPlate3D::PlotWeightingFieldProfile()
 	wFieldView.SetCanvas(cwProfile);
 	wFieldView.SetSensor(&sensor);
 	wFieldView.PlotProfileWeightingField(sensorLabel, 0., 0., -stackSize / 2., 0., 0., stackSize / 2., "v");
-	cwProfile->SaveAs("wfield_profile.png");
+	filesystem::create_directories(otuputFolder);
+	cwProfile->SaveAs((otuputFolder + "wfield_profile.png").c_str());
 }
 
 void ParallelPlate3D::PlotDriftLines2D()
@@ -299,6 +338,11 @@ void ParallelPlate3D::View3D()
 void ParallelPlate3D::PlotSignal()
 {
 	plotSignal = true;
+}
+
+void ParallelPlate3D::PlotCharge()
+{
+	plotCharge = true;
 }
 
 void ParallelPlate3D::PrintDebugAtPoint(double x, double y, double z)
