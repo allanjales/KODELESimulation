@@ -114,6 +114,7 @@ public:
 	std::tuple<double, double, double> ElectricField(const double x, const double y, const double z);
 	std::tuple<double, double, double> WeightingField(const double x, const double y, const double z);
 	double WeightingPotentialField(const double x, const double y, const double z);
+	void SetElectricField(double electricField) { this->electricField = electricField; }
 
 	// Visualisation helpers
 	void PlotElectricFieldProfile();

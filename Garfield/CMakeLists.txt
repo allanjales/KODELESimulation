@@ -18,6 +18,9 @@ file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.hh)
 add_executable(KODELE KODELE.cc ${sources} ${headers})
 target_link_libraries(KODELE Garfield::Garfield)
 
+add_executable(MultipleKODELE MultipleKODELE.cc ${sources} ${headers})
+target_link_libraries(MultipleKODELE Garfield::Garfield)
+
 # ---Copy all files locally to the build directory-------------------------------
 file(GLOB GAS_FILES "*.gas")
 file(COPY ${GAS_FILES} DESTINATION ${PROJECT_BINARY_DIR})
