@@ -25,7 +25,7 @@ class EfficienciesPlot:
 		self.fig, self.ax = plt.subplots(figsize=(10, 10))
 		self.fig.subplots_adjust(left=0.10, right=0.96, bottom=0.08, top=0.94)
 		
-		self.ax.set_xlabel("HV$_{eff}$ [V]", fontsize=22, fontweight="bold")
+		self.ax.set_xlabel("HV [V]", fontsize=22, fontweight="bold")
 		self.ax.set_ylabel("Efficiency [%]", fontsize=22, fontweight="bold")
 		self.ax.tick_params(axis="both", labelsize=22)
 		plt.setp(self.ax.get_xticklabels(), fontweight='bold')
@@ -37,7 +37,7 @@ class EfficienciesPlot:
 		self.ax.tick_params(top=False, right=True, which="both", direction="in")
 		
 		# CMS Preliminary
-		hep.cms.label("Simulation", data=True, ax=self.ax, loc=0, fontsize=("large", "medium", "x-large", "medium"),
+		hep.cms.label("Simulation", data=True, ax=self.ax, loc=0, fontsize=("large", "medium", "large", "medium"),
 			rlabel="Garfield++", fontweight=("bold", "normal", "bold", "normal"))
 		
 		# Horizontal line at y=100

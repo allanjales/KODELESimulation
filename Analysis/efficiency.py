@@ -11,19 +11,13 @@ from tqdm import tqdm
 from src.EfficienciesPlot import EfficienciesPlot
 from src.sigmoid import Sigmoid
 
-# Define the gas name here (this will direct all reads and writes)
-# GAS_NAME = "cms_rpc_95.2_4.5_0.3_25-40kV"
-# GAS_NAME = "CO2_30_SF6_1"
-# GAS_NAME = "CO2_40_SF6_1"
-GAS_NAME = "CO2_30_SF6_05"
-
 # Adjustable threshold in fC for efficiency calculation
 THRESHOLD_FC = 60.0
 
 # RPC gap size in mm to convert electric field [kV/mm] to High Voltage [V]
 GAP_SIZE_MM = 1.4
 
-def extract_simulation_data(input_dir: str, threshold_fc: float, output_dir: str, filename: str) -> pd.DataFrame:
+def extract_simulation_data(input_dir: str, threshold_fc: float, output_dir: str, foldername: str) -> pd.DataFrame:
 	'''
 	Reads all consolidated tic_*kVmm.csv files, calculates mean induced charge,
 	standard deviations, standard errors, and binomial efficiency, saving inside input_dir.
@@ -32,18 +26,15 @@ def extract_simulation_data(input_dir: str, threshold_fc: float, output_dir: str
 	results = []
 	csv_files = glob.glob(os.path.join(input_dir, "tic_*kVmm.csv"))
 
-	print(f"Found {len(csv_files)} files in '{input_dir}'. Extracting data...\n")
+	print(f"Found {len(csv_files)} files in '{input_dir}'. Extracting data...")
 
-	for file_path in tqdm(sorted(csv_files), desc="Processing Electric Fields", unit="field"):
+	for file_path in csv_files:
 
 		file_name = os.path.basename(file_path)
 		
 		# Extract the numeric value of the electric field from string
-		try:
-			field_str = file_name.replace("tic_", "").replace("kVmm.csv", "")
-			field_value = float(field_str)
-		except ValueError:
-			continue
+		field_str = file_name.replace("tic_", "").replace("kVmm.csv", "")
+		field_value = float(field_str)
 
 		try:
 			# Skip line 0. Line 1 becomes the actual header
@@ -54,6 +45,7 @@ def extract_simulation_data(input_dir: str, threshold_fc: float, output_dir: str
 			n_events = len(charges)
 			
 			if n_events == 0:
+				print(f"[WARNING] No valid events found in {file_name}. Skipping this file.")
 				continue
 				
 			# Charge statistics
@@ -78,86 +70,101 @@ def extract_simulation_data(input_dir: str, threshold_fc: float, output_dir: str
 				"N Events": n_events
 			})
 		except Exception as e:
-			print(f"\n[WARNING] Could not read {file_name}: {e}")
+			print(f"[WARNING] Could not read {file_name}: {e}")
 
 	df = pd.DataFrame(results)
 
 	if not df.empty:
 		df = df.sort_values(by="Electric Field [kV/mm]")
-		print("\n")
-		print(df.to_string(index=False))
 		
 		# Save the csv
 		os.makedirs(output_dir, exist_ok=True)
-		output_csv = os.path.join(output_dir, filename)
+		output_csv = os.path.join(output_dir, foldername)
 		df.to_csv(output_csv, index=False)
-		print(f"\nTable successfully saved to '{output_csv}'!")
+		print(f"Table successfully saved to '{output_csv}'!")
 	else:
-		print("\n[ERROR] No valid data found to process.")
+		print("[ERROR] No valid data found to process.")
 
 	return df
 
-def plot_simulated_efficiency(df: pd.DataFrame, output_dir: str, preset_name: str, gap_size_mm: float = 1.4):
-	'''
-	Converts the electric field to HV based on gap size and plots the 
-	efficiency curve with its sigmoid fit, saving inside output_dir.
-	'''
-	if df.empty:
-		print("[ERROR] DataFrame is empty. Cannot generate plot.")
-		return
+def main():
+	gases_list = [
+		{
+			"foldername": "cms_rpc_95.2_4.5_0.3_25-40kV",
+			"label": "Standard gas mixture",
+			"color": "magenta",
+			"marker": "v"
+		},
+		{
+			"foldername": "CO2_30_SF6_1",
+			"label": "CO$_{2}$ 30% + SF$_{6}$ 1.0%",
+			"color": "green",
+			"marker": "^"
+		},
+		{
+			"foldername": "CO2_30_SF6_05",
+			"label": "CO$_{2}$ 30% + SF$_{6}$ 0.5%",
+			"color": "red",
+			"marker": "o"
+		},
+		{
+			"foldername": "CO2_40_SF6_1",
+			"label": "CO$_{2}$ 40% + SF$_{6}$ 1.0%",
+			"color": "blue",
+			"marker": "s"
+		},
+	]
+	preset_name = "efficiency_curves"
 
-	# Convert Electric Field [kV/mm] to High Voltage [V]
-	x_vals = df["Electric Field [kV/mm]"].values * gap_size_mm * 1000.0
-	
-	# As percentage [%]
-	y_vals = df["Efficiency"].values * 100.0
-	y_errs = df["Uncertainty Efficiency"].values * 100.0
-	x_errs = np.zeros_like(x_vals)
+	output_dir = f"output/"
+	plotter = EfficienciesPlot(preset_name, x_min=6100, x_max=7625, y_max=128)
 
-	plot_save_path = os.path.join(output_dir, preset_name)
+	# Plot each gas
+	for gas in gases_list:
+		input_dir = f"../Garfield/results/{gas['foldername']}/"
+		df = extract_simulation_data(input_dir, THRESHOLD_FC, output_dir, foldername=f"{gas['foldername']}_{preset_name}.csv")
 
-	# plotter = EfficienciesPlot(plot_save_path, x_min=min(x_vals) - 100, x_max=max(x_vals) + 100, y_max=110)	
-	plotter = EfficienciesPlot(preset_name, x_min=6100, x_max=7625, y_max=110)
-	
-	legend_label = "Simulated Efficiency"
-	
-	# Fit Sigmoid and get labels
-	try:
-		sigmoid_curve = Sigmoid()
-		sigmoid_curve.fit(x_vals, y_vals, y_errs)
-		plotter.add_sigmoid(sigmoid_curve, color="red")
+		if df.empty:
+			print(f"[WARNING] No valid data found for gas '{gas['label']}' ({gas['foldername']}). Skipping plot generation.")
+			continue
+
+		# Convert Electric Field [kV/mm] to High Voltage [V]
+		x_vals = df["Electric Field [kV/mm]"].values * GAP_SIZE_MM * 1000.0
+		x_errs = np.zeros_like(x_vals)
 		
-		wp = sigmoid_curve.wp()
-		eff_wp = sigmoid_curve.eval(wp)
+		# As percentage [%]
+		y_vals = df["Efficiency"].values * 100.0
+		y_errs = df["Uncertainty Efficiency"].values * 100.0
+
+		plot_save_path = os.path.join(output_dir, preset_name)
+
+		legend_label = "Simulated Efficiency"
+
+		# Fit Sigmoid and get labels
+		sigmoid = Sigmoid()
+		sigmoid.fit(x_vals, y_vals, y_errs)
+		plotter.add_sigmoid(sigmoid, color=gas['color'])
 		
-		legend_label = rf"plateau = ({sigmoid_curve.ymax.n:.1f} $\pm$ {sigmoid_curve.ymax.s:.1f}) %, " \
-					   rf"WP = ({wp.n:.0f} $\pm$ {wp.s:.0f}) V, " \
-					   rf"Eff(WP) = ({eff_wp.n:.1f} $\pm$ {eff_wp.s:.1f}) %"
-	except Exception as e:
-		print(f"[WARNING] Could not fit the sigmoid: {e}")
-	
-	plotter.add_efficiency_points(x_vals, y_vals, x_errs, y_errs, color="red", marker="o", label=legend_label)
+		wp = sigmoid.wp()
+		eff_wp = sigmoid.eval(wp)
+		
+		# legend_label = rf"{gas['label']} plateau = ({sigmoid.ymax.n:.1f} $\pm$ {sigmoid.ymax.s:.1f}) %, " \
+		# 			   rf"WP = ({wp.n:.0f} $\pm$ {wp.s:.0f}) V, " \
+		# 			   rf"Eff(WP) = ({eff_wp.n:.1f} $\pm$ {eff_wp.s:.1f}) %"
+
+		legend_label = rf"plateau = {sigmoid.ymax.n:.0f}%, WP = {wp.n:.0f} V, {gas['label']}, Eff(WP) = {eff_wp.n:.0f}%"
+		
+		plotter.add_efficiency_points(x_vals, y_vals, x_errs, y_errs, color=gas['color'], marker=gas['marker'], label=legend_label)
 
 	caption_list = [
-		f"Gas: {GAS_NAME}",
 		"Without background rate",
 		f"Threshold = {THRESHOLD_FC} fC",
-		f"{gap_size_mm} mm gap RPC",
+		f"{GAP_SIZE_MM} mm gap RPC",
 	]
 
 	plotter.draw(caption_list)
 	plotter.save()
 	print(f"Plot successfully saved to '{plot_save_path}'!")
-
-def main():
-	# input_dir = f"results/{GAS_NAME}/"
-	input_dir = f"../Garfield/results/{GAS_NAME}/"
-	output_dir = f"output/"
-	df_results = extract_simulation_data(input_dir, THRESHOLD_FC, output_dir, filename=f"{GAS_NAME}_Efficiency_Results.csv")
-	
-	if not df_results.empty:
-		print("\nGenerating efficiency curve plot...")
-		plot_simulated_efficiency(df_results, output_dir, f"{GAS_NAME}_Efficiency_Curve", gap_size_mm=GAP_SIZE_MM)
 
 if __name__ == "__main__":
 	main()
