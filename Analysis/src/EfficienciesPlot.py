@@ -37,8 +37,8 @@ class EfficienciesPlot:
 		self.ax.tick_params(top=False, right=True, which="both", direction="in")
 		
 		# CMS Preliminary
-		hep.cms.label("Preliminary", data=True, ax=self.ax, loc=0, fontsize=("large", "medium", "x-large", "medium"),
-			rlabel="GIF++", fontweight=("bold", "normal", "bold", "normal"))
+		hep.cms.label("Simulation", data=True, ax=self.ax, loc=0, fontsize=("large", "medium", "x-large", "medium"),
+			rlabel="Garfield++", fontweight=("bold", "normal", "bold", "normal"))
 		
 		# Horizontal line at y=100
 		self.ax.axhline(100., color="black", linestyle="--", linewidth=3., alpha=0.8)
@@ -66,7 +66,7 @@ class EfficienciesPlot:
 
 	def draw(self, caption_list: list[str]):
 		# Draw legend
-		self.ax.legend(loc="upper left", fontsize=16)
+		self.ax.legend(loc="upper left", fontsize=18)
 		
 		# Remove y-axis tick label above 100
 		yticks = self.ax.get_yticks()
@@ -78,8 +78,8 @@ class EfficienciesPlot:
 		self.ax.set_yticklabels(labels)
 		
 		# Draw captions
-		x_caption = 0.55
-		y_caption = 0.37
+		x_caption = 0.15
+		y_caption = 0.65
 		for i, line in enumerate(caption_list):
 			self.fig.text(x_caption, y_caption - (i * 0.04), line, fontsize=20, ha="left", va="top", transform=self.fig.transFigure)
 		

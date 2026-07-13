@@ -1,104 +1,163 @@
+#!/usr/bin/env python3
+
+# -*- coding: utf-8 -*-
 # Author: Allan Jales
 
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 import os
-import ROOT
+import glob
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
 from src.EfficienciesPlot import EfficienciesPlot
-from src.utils import *
 from src.sigmoid import Sigmoid
 
-def plot_efficiencies(preset_name : str):
+# Define the gas name here (this will direct all reads and writes)
+# GAS_NAME = "cms_rpc_95.2_4.5_0.3_25-40kV"
+# GAS_NAME = "CO2_30_SF6_1"
+# GAS_NAME = "CO2_40_SF6_1"
+GAS_NAME = "CO2_30_SF6_05"
+
+# Adjustable threshold in fC for efficiency calculation
+THRESHOLD_FC = 60.0
+
+# RPC gap size in mm to convert electric field [kV/mm] to High Voltage [V]
+GAP_SIZE_MM = 1.4
+
+def extract_simulation_data(input_dir: str, threshold_fc: float, output_dir: str, filename: str) -> pd.DataFrame:
 	'''
-	Overplots efficiency graphs from multiple scans utilizando Matplotlib.
+	Reads all consolidated tic_*kVmm.csv files, calculates mean induced charge,
+	standard deviations, standard errors, and binomial efficiency, saving inside input_dir.
 	'''
 
-	PRESET = {
-		"X_MIN": 5600,
-		"X_MAX": 6400,
-		"Y_MAX": 1.05,
-	}
+	results = []
+	csv_files = glob.glob(os.path.join(input_dir, "tic_*kVmm.csv"))
 
-	plotter = EfficienciesPlot(preset_name, PRESET["X_MIN"], PRESET["X_MAX"], PRESET["Y_MAX"])
+	print(f"Found {len(csv_files)} files in '{input_dir}'. Extracting data...\n")
 
-	for path, (label, color, marker) in PRESET["SCANS"].items():
-		root_path = os.path.join(READ_BASE_DIR, path, "output.root")
+	for file_path in tqdm(sorted(csv_files), desc="Processing Electric Fields", unit="field"):
 
-		if not os.path.exists(root_path):
-			print(f"[ERROR] File not found: {root_path}")
-			continue
-
-		f = ROOT.TFile.Open(root_path)
-		if not f or f.IsZombie():
-			print(f"[ERROR] Error openning: {root_path}")
-			continue
-
-		# Load efficiency graph
-		if not (eff_gr := load_TGraph_from_TFile(f, "efficiencyMuon_corrected_HVeff")):
-			print("Skipping.")
-			continue
-
-		if eff_gr.GetN() <= 3:
-			print(f"[WARNING] Low number of points in efficiency graph for {root_path} ({eff_gr.GetN()} points)")
-
-		tf1 = get_attached_tf1(eff_gr)
-		if not tf1:
-			print(f"[WARNING] No TF1 attached to graph in {root_path}")
-			f.Close()
-			continue
+		file_name = os.path.basename(file_path)
 		
-		# Load noise graph
-		if not (noise_gr := load_TGraph_from_TFile(f, "noiseGammaRate_HVeff")):
-			print("Skipping.")
+		# Extract the numeric value of the electric field from string
+		try:
+			field_str = file_name.replace("tic_", "").replace("kVmm.csv", "")
+			field_value = float(field_str)
+		except ValueError:
 			continue
+
+		try:
+			# Skip line 0. Line 1 becomes the actual header
+			df_event = pd.read_csv(file_path, skiprows=1)
+
+			df_event = df_event.dropna(subset=["Total Charge [fC]"])
+			charges = df_event["Total Charge [fC]"].abs()
+			n_events = len(charges)
 			
-		# Load cluster size
-		if not (gamma_cls_gr := load_TGraph_from_TFile(f, "gammaCLS_HVeff")):
-			print("Skipping.")
-			continue
-
-		sigmoid = Sigmoid(tf1)
-		wp = sigmoid.wp()
-		eff_at_wp = sigmoid.eval(wp)
-		gamma_at_wp = eval_graph_at_x(noise_gr, wp.n)
-		gamma_cls_at_wp = eval_graph_at_x(gamma_cls_gr, wp.n)
-		if gamma_at_wp is None or gamma_cls_at_wp is None:
-			print(f"[ERROR] Could not evaluate noise or cluster size at WP for {root_path}")
-			f.Close()
-			continue
+			if n_events == 0:
+				continue
+				
+			# Charge statistics
+			mean_charge = charges.mean()
+			std_charge = charges.std()
+			sem_charge = charges.sem() # Standard Error of the Mean (std / sqrt(N))
 			
-		bkg_rate_at_wp = gamma_at_wp/gamma_cls_at_wp
+			# Efficiency calculation
+			n_passed = (charges >= threshold_fc).sum()
+			efficiency = n_passed / n_events
+			std_efficiency = np.sqrt(efficiency * (1.0 - efficiency))
+			unc_efficiency = std_efficiency / np.sqrt(n_events)
 
-		# Extract points and errors from TGraph as array
-		n_points = eff_gr.GetN()
-		x_vals = np.array([eff_gr.GetPointX(i) for i in range(n_points)])
-		y_vals = np.array([eff_gr.GetPointY(i) for i in range(n_points)])
-		x_errs = np.array([eff_gr.GetErrorX(i) for i in range(n_points)]) if hasattr(eff_gr, "GetErrorX") else None
-		y_errs = np.array([eff_gr.GetErrorY(i) for i in range(n_points)]) if hasattr(eff_gr, "GetErrorY") else None
-		
-		# Legend string
-		bkg_rate_str = f"bkg rate(WP) = {(bkg_rate_at_wp).n/1000:.1f} kHz/cm$^{{2}}$"
-		if label == "Source OFF":
-			bkg_rate_str = "without background rate"
-		legend_label = f"plateau = {sigmoid.ymax.n:.0f}%, WP = {wp.n/1000:.2f} kV, {bkg_rate_str}, Eff(WP) = {eff_at_wp.n:.0f}%"
-		
-		plotter.add_efficiency_points(x_vals, y_vals, x_errs, y_errs, color=color, marker=marker, label=legend_label)
-		plotter.add_sigmoid(sigmoid, color=color)
-		
-		f.Close()
+			results.append({
+				"Electric Field [kV/mm]": field_value,
+				"Mean Total Charge [fC]": mean_charge,
+				"StdDev Total Charge [fC]": std_charge,
+				"SEM Total Charge [fC]": sem_charge,
+				"Efficiency": efficiency,
+				"StdDev Efficiency": std_efficiency,
+				"Uncertainty Efficiency": unc_efficiency,
+				"N Events": n_events
+			})
+		except Exception as e:
+			print(f"\n[WARNING] Could not read {file_name}: {e}")
 
-	caption = ""
-	for line in PRESET["CAPTION_LIST"]:
-		caption += line + "\n"
-	plotter.draw([caption])
-	plotter.save()
+	df = pd.DataFrame(results)
+
+	if not df.empty:
+		df = df.sort_values(by="Electric Field [kV/mm]")
+		print("\n")
+		print(df.to_string(index=False))
+		
+		# Save the csv
+		os.makedirs(output_dir, exist_ok=True)
+		output_csv = os.path.join(output_dir, filename)
+		df.to_csv(output_csv, index=False)
+		print(f"\nTable successfully saved to '{output_csv}'!")
+	else:
+		print("\n[ERROR] No valid data found to process.")
+
+	return df
+
+def plot_simulated_efficiency(df: pd.DataFrame, output_dir: str, preset_name: str, gap_size_mm: float = 1.4):
+	'''
+	Converts the electric field to HV based on gap size and plots the 
+	efficiency curve with its sigmoid fit, saving inside output_dir.
+	'''
+	if df.empty:
+		print("[ERROR] DataFrame is empty. Cannot generate plot.")
+		return
+
+	# Convert Electric Field [kV/mm] to High Voltage [V]
+	x_vals = df["Electric Field [kV/mm]"].values * gap_size_mm * 1000.0
 	
+	# As percentage [%]
+	y_vals = df["Efficiency"].values * 100.0
+	y_errs = df["Uncertainty Efficiency"].values * 100.0
+	x_errs = np.zeros_like(x_vals)
+
+	plot_save_path = os.path.join(output_dir, preset_name)
+
+	# plotter = EfficienciesPlot(plot_save_path, x_min=min(x_vals) - 100, x_max=max(x_vals) + 100, y_max=110)	
+	plotter = EfficienciesPlot(preset_name, x_min=6100, x_max=7625, y_max=110)
+	
+	legend_label = "Simulated Efficiency"
+	
+	# Fit Sigmoid and get labels
+	try:
+		sigmoid_curve = Sigmoid()
+		sigmoid_curve.fit(x_vals, y_vals, y_errs)
+		plotter.add_sigmoid(sigmoid_curve, color="red")
+		
+		wp = sigmoid_curve.wp()
+		eff_wp = sigmoid_curve.eval(wp)
+		
+		legend_label = rf"plateau = ({sigmoid_curve.ymax.n:.1f} $\pm$ {sigmoid_curve.ymax.s:.1f}) %, " \
+					   rf"WP = ({wp.n:.0f} $\pm$ {wp.s:.0f}) V, " \
+					   rf"Eff(WP) = ({eff_wp.n:.1f} $\pm$ {eff_wp.s:.1f}) %"
+	except Exception as e:
+		print(f"[WARNING] Could not fit the sigmoid: {e}")
+	
+	plotter.add_efficiency_points(x_vals, y_vals, x_errs, y_errs, color="red", marker="o", label=legend_label)
+
+	caption_list = [
+		f"Gas: {GAS_NAME}",
+		"Without background rate",
+		f"Threshold = {THRESHOLD_FC} fC",
+		f"{gap_size_mm} mm gap RPC",
+	]
+
+	plotter.draw(caption_list)
+	plotter.save()
+	print(f"Plot successfully saved to '{plot_save_path}'!")
+
 def main():
-	plot_efficiencies("mix1_2025")
-	plot_efficiencies("mix1_2025_selected")
-	plot_efficiencies("mix2_2025")
+	# input_dir = f"results/{GAS_NAME}/"
+	input_dir = f"../Garfield/results/{GAS_NAME}/"
+	output_dir = f"output/"
+	df_results = extract_simulation_data(input_dir, THRESHOLD_FC, output_dir, filename=f"{GAS_NAME}_Efficiency_Results.csv")
+	
+	if not df_results.empty:
+		print("\nGenerating efficiency curve plot...")
+		plot_simulated_efficiency(df_results, output_dir, f"{GAS_NAME}_Efficiency_Curve", gap_size_mm=GAP_SIZE_MM)
 
 if __name__ == "__main__":
 	main()

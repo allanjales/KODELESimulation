@@ -109,6 +109,7 @@ public:
 	void AddDebugTrack();
 
 	void Simulate();
+	double GetTotalInducedCharge() { return sensor.GetTotalInducedCharge(sensorLabel); }
 
 	// Fields definitions
 	std::tuple<double, double, double> ElectricField(const double x, const double y, const double z);

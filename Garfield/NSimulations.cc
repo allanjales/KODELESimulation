@@ -1,5 +1,5 @@
 // !------------------------
-// ! KODELE simulation with Garfield++
+// ! KODELE N simulation with Garfield++
 // ! Author: Allan Jales
 // !------------------------
 
@@ -21,6 +21,32 @@ Medium* CreateDielectricMedium(const double dielectricConstant)
 
 int main(int argc, char* argv[])
 {
+	// !------------------------
+	// ! Command-line arguments parsing
+	// !------------------------
+	if (argc < 4)
+	{
+		std::cerr << "Usage: " << argv[0] << " <electric_field_kVmm> <number_of_simulations> <gas_file>\n";
+		std::cerr << "Example: " << argv[0] << " 4.5 1000 CO2_30_SF6_1.gas\n";
+		return 1;
+	}
+
+	double electricField = std::stod(argv[1]);
+	int nsimulations     = std::stoi(argv[2]);
+	std::string gasFile  = argv[3];
+
+	std::string gasName = gasFile;
+	size_t lastSlash = gasName.find_last_of("/\\");
+	if (lastSlash != std::string::npos)
+	{
+		gasName = gasName.substr(lastSlash + 1);
+	}
+	size_t dotPos = gasName.rfind(".gas");
+	if (dotPos != std::string::npos)
+	{
+		gasName = gasName.substr(0, dotPos);
+	}
+
 	TApplication app("app", &argc, argv);
 
 	float width  = 50 * cm;
@@ -36,10 +62,6 @@ int main(int argc, char* argv[])
 	Medium* bakeliteMedium     = CreateDielectricMedium(5.);
 	Medium* airMedium          = CreateDielectricMedium(1.00058986);
 
-	// Load the gas file so that macroscopic transport coefficients
-	// (drift velocity, Townsend coefficient, etc.) are available for AvalancheGrid.
-	// const std::string gasFile = "cms_rpc_95.2_4.5_0.3_25-40kV.gas";
-	const std::string gasFile = "CO2_30_SF6_1.gas";
 	MediumMagboltz* gasMedium = new MediumMagboltz();
 	if (!gasMedium->LoadGasFile(gasFile))
 	{
@@ -77,40 +99,39 @@ int main(int argc, char* argv[])
 
 	// RPC Setup
 	ParallelPlate3D rpc;
-	double electricField = 5.0 * kV/mm;
-	rpc.Setup(detectorStack, electricField, width, height);
+	rpc.Setup(detectorStack, electricField * kV/mm, width, height);
 	rpc.signalTimeWindow.Set(0.*ns, 20*ns, 1000);
-	DEBUGLOG("Detector setup completed.");
+	DEBUGLOG("Detector setup completed for E = " << electricField << " kV/mm.");
 
 	// RPC Simulate
-	int nsimulations = 1000;
-	for (float electricField = 4.2; electricField <= 5.5; electricField += 0.1)
+	rpc.SetElectricField(electricField * kV/mm);
+
+	std::stringstream ss;
+	ss << std::fixed << std::setprecision(1) << electricField;
+	std::string efStr = ss.str();
+	
+	std::string outputFolder = "results/" + gasName;
+	filesystem::create_directories(outputFolder);
+	std::ofstream outputFile(outputFolder + "/tic_" + efStr + "kVmm.csv");
+	
+	if (!outputFile.is_open())
 	{
-		rpc.SetElectricField(electricField * kV/mm);
+		std::cerr << "Error: Could not create or open the file!" << std::endl;
+		return 1;
+	}
 
-		std::ofstream outputFile("tic_std_" + std::format("{:.1f}", electricField) + "kVmm.csv");
-		
-		if (!outputFile.is_open())
-		{
-			std::cerr << "Error: Could not create or open the file!" << std::endl;
-			return 1;
-		}
-
-		outputFile << "The total induced charge.\n";
-		outputFile << "id,Total Charge [fC]\n";
-		for (int i = 0; i < nsimulations; i++)
-		{
-			rpc.SetOutputFolder(std::string("results/") + std::to_string(electricField) + "kVmm/" + std::to_string(i) + "/");
-			rpc.AddTrack("e-", 100*GeV, Vector3D(0., 0., 0.372*cm), Vector3D(0., 0., -1.), 0.*ns);
-			rpc.Simulate();
-			outputFile << i << "," << rpc.GetTotalInducedCharge() << "\n";
-			printf("Simulation completed %d/%d for electric field %f kV/mm.\n", i+1, nsimulations, electricField);
-		}
-		
-		outputFile.close();
+	outputFile << "The total induced charge.\n";
+	outputFile << "id,Total Charge [fC]\n";
+	for (int i = 0; i < nsimulations; i++)
+	{
+		rpc.AddTrack("e-", 100*GeV, Vector3D(0., 0., 0.372*cm), Vector3D(0., 0., -1.), 0.*ns);
+		rpc.Simulate();
+		outputFile << i << "," << rpc.GetTotalInducedCharge() << "\n";
+		printf("Simulation completed %d/%d for electric field %f kV/mm.\n", i+1, nsimulations, electricField);
 	}
 	
-	DEBUGLOG("End of program.");
-	// app.Run(true);
+	outputFile.close();
+
+	DEBUGLOG("End of program for E = " << efStr << " kV/mm.");
 	return 0;
 }
