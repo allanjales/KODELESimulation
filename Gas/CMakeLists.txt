@@ -15,11 +15,8 @@ file(GLOB sources ${PROJECT_SOURCE_DIR}/src/*.cc)
 file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.hh)
 
 # ---Build executable------------------------------------------------------------
-add_executable(KODELE KODELE.cc ${sources} ${headers})
-target_link_libraries(KODELE Garfield::Garfield)
-
-add_executable(NSimulations NSimulations.cc ${sources} ${headers})
-target_link_libraries(NSimulations Garfield::Garfield ROOT::EG)
+add_executable(GasTableGenerator GasTableGenerator.cc ${sources} ${headers})
+target_link_libraries(GasTableGenerator Garfield::Garfield)
 
 # ---Copy all files locally to the build directory-------------------------------
 file(GLOB GAS_FILES "*.gas")
