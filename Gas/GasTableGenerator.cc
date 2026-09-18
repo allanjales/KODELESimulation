@@ -88,11 +88,11 @@ int main(int argc, char *argv[])
 	argparse::ArgumentParser create_command("create");
 	create_command.add_description("Create a gas table file for Garfield++ simulations using Magboltz");
 	
-	create_command.add_argument("-m", "--mixture")
-	    .help("Gas mixture aside of its fractions in the [0, 1] range").metavar("\"GAS1 FRAC1 ... GAS6 FRAC6\"").required();
-	create_command.add_argument("-e", "--ef")
-	    .help("Electric field point where the calculations will be performed").scan<'g', double>().metavar("V/cm").required();
-	create_command.add_argument("-o", "--output").help("Output gas file name").metavar("FILE.gas").required();
+	create_command.add_argument("mixture")
+	    .help("Gas mixture aside of its fractions in the [0, 1] range").metavar("\"GAS1 FRAC1 ... GAS6 FRAC6\"");
+	create_command.add_argument("eletric_field")
+	    .help("Electric field point where the calculations will be performed").scan<'g', double>().metavar("V/cm");
+	create_command.add_argument("output").help("Output gas file name").metavar("FILE.gas");
 	
 	create_command.add_argument("-t", "--temperature").help("Gas temperature in Kelvin")
 	    .default_value(273.15).scan<'g', double>().nargs(1).metavar("KELVIN");
@@ -105,7 +105,7 @@ int main(int argc, char *argv[])
 	create_command.add_argument("-v", "--verbose").help("Enable verbose output").flag();
 	
 	create_command.add_epilog("Example usage:\n"
-		"  ./GasTableGenerator create -m \"C2H2F4 0.952 iC4H10 0.045 SF6 0.003\" -e 1000 -o gasfile.gas");
+		"  ./GasTableGenerator create \"C2H2F4 0.952 iC4H10 0.045 SF6 0.003\" 1000 gasfile.gas");
 
 
 
@@ -114,7 +114,7 @@ int main(int argc, char *argv[])
 	merge_command.add_description("Merge multiple gas table files into a single file");
 
 	merge_command.add_argument("output")
-	    .help("Output gas file name").metavar("TARGET").required();
+	    .help("Output gas file name").metavar("TARGET");
 	merge_command.add_argument("files")
 		.help("Table gas files to merge. Fileglobs (e.g.  *.gas) can be given to merge all matching files.").remaining()
 		.nargs(argparse::nargs_pattern::at_least_one).metavar("SOURCE");
@@ -156,7 +156,7 @@ int main(int argc, char *argv[])
 	if (program.is_subcommand_used(create_command))
 	{
 		// Gas creation
-		std::unique_ptr<Garfield::MediumMagboltz> gas = CreateMagboltzMedium(create_command.get<string>("--mixture"));
+		std::unique_ptr<Garfield::MediumMagboltz> gas = CreateMagboltzMedium(create_command.get<string>("mixture"));
 
 		bool isThermalMotionEnabled = !create_command.get<bool>("--no-thermal");
 		gas->SetTemperature(create_command.get<double>("--temperature"));
@@ -168,10 +168,10 @@ int main(int argc, char *argv[])
 		cout << "  Thermal motion: " << (isThermalMotionEnabled ? "enabled" : "disabled") << "\n";
 		
 		// Arguments reading
-		double ef = create_command.get<double>("--ef");
+		double ef = create_command.get<double>("eletric_field");
 		int collisions = create_command.get<int>("--collisions");
 		bool verbose = create_command.get<bool>("--verbose");
-		string filename = create_command.get<string>("--output");
+		string filename = create_command.get<string>("output");
 		cout << "Generating gas table with the following parameters:\n";
 		cout << "  Electric field: " << ef << " V/cm\n";
 		cout << "  Collisions    : " << collisions << " x 10^7\n";

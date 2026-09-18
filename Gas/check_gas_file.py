@@ -2,12 +2,14 @@
 # -*- coding: utf-8 -*-
 
 # Author: Allan jales
+# Description: This script checks a .gas file and plots the coefficients using Garfield++.
 
 import argparse
 import ROOT
 import ctypes
 import matplotlib.pyplot as plt
 import mplhep as hep
+from matplotlib.offsetbox import AnchoredText
 
 # Garfield library load
 ROOT.gSystem.Load("libGarfield.so")
@@ -33,14 +35,15 @@ def print_consistency(name : str, vals : list[float], threshold : float = 1.0, r
 	if vals == sorted(vals, reverse=reverse):
 		print("Too Perfect. Sorted.")
 	elif are_values_consistent(vals, threshold=threshold):
-		print("OK. Not sorted, but no discrepacy greater than 1.")
+		print(f"OK. Not sorted, but no discrepacy greater than {threshold}.")
 	else:
 		print(f"NOT OK. There are values with difference greater than {threshold}.")
 
 def main():
-	parser = argparse.ArgumentParser(description="Check .gas file and plot coefficients using Garfield++")
+	parser = argparse.ArgumentParser(description="Check .gas file and plot coefficients using Garfield++ for different electric fields")
 	parser.add_argument("filename", type=str, help="The path to the .gas file")
 	parser.add_argument("-g", "--graph", action="store_true", help="Plot the coefficients graphically")
+	parser.add_argument("-l", "--log", action="store_true", help="Set graph Y-axis to logarithmic scale")
 	parser.add_argument("-v", "--verbose", action="store_true", help="Verbose each point in the grid")
 	parser.add_argument("-t", "--threshold", help="Threshold for consistency check", type=float, default=1.0)
 	args = parser.parse_args()
@@ -50,6 +53,17 @@ def main():
 	if not gas.LoadGasFile(args.filename):
 		print(f"Error: Could not load {args.filename}")
 		exit(1)
+
+	pressure = gas.GetPressure()
+	temperature = gas.GetTemperature()
+
+	components = []
+	label = ROOT.std.string()
+	frac = ctypes.c_double(0.0)
+	for i in range(gas.GetNumberOfComponents()):
+		gas.GetComponent(i, label, frac)
+		components.append(f"{str(label)} {frac.value:g}")
+	components = " ".join(components)
 
 	eFields = ROOT.std.vector('double')()
 	bFields = ROOT.std.vector('double')()
@@ -61,14 +75,12 @@ def main():
 	eta_vals = []
 	eff_vals = []
 
-	# In PyROOT, we use ctypes to simulate passing a variable by reference from C++
+	# c_types simulate passing a variable by reference form C++
 	alpha = ctypes.c_double(0.0)
 	eta = ctypes.c_double(0.0)
 
-	# Iterates over each electric field point index to extract the coefficients
 	for i, eField in enumerate(eFields):
-		# PyROOT matches the overload that expects grid indices (size_t ie, size_t ib, size_t ia)
-		# Since B field and angle are 0, their indices are 0
+		# Electric field, Magnetic field and angle.
 		gas.GetElectronTownsend(i, 0, 0, alpha)
 		gas.GetElectronAttachment(i, 0, 0, eta)
 
@@ -78,16 +90,20 @@ def main():
 		E_vals.append(eField)
 		alpha_vals.append(a)
 		eta_vals.append(e)
-		eff_vals.append(a - e) # Effective Townsend
+		eff_vals.append(a - e)
 
 		if args.verbose:
 			print(f"Point {i:03d}: E = {eField:.1f}, alpha = {a:.2f}, eta = {e:.2f}, alpha - eta = {(a - e):.2f}")
 
-
-	print(f"Gas Mixture: {args.filename}")
-	print(f"Start : {E_vals[0]}")
-	print(f"End   : {E_vals[-1]}")
+	print("-------- Summary --------")
+	print(f"File path  : {args.filename}")
+	print(f"Gas Mixture: {components}")
+	print(f"Temperature: {temperature:.2f} K ({(temperature-273.15):.2f} °C)")
+	print(f"Pressure   : {pressure:.2f} Torr ({pressure * 1.33322368:.2f} mbar)")
+	print(f"Start : {E_vals[0]} V/cm")
+	print(f"End   : {E_vals[-1]} V/cm")
 	print(f"Points: {len(E_vals)}")
+	print("-------------------------")
 
 	if len(E_vals) > 1:
 		print_consistency("Effective Townsend Coefficient (alpha - eta)... ", eff_vals, threshold=args.threshold)
@@ -104,17 +120,15 @@ def main():
 		plt.plot(E_vals, eta_vals, label=r'Attachment ($\eta$)', color='tab:red', marker='s', markersize=4)
 		plt.plot(E_vals, eff_vals, label=r'Effective ($\alpha - \eta$)', color='tab:green', linestyle='--')
 
-		# Adds a reference line at Y=0
-		# Where the green curve crosses zero is the avalanche threshold
-		plt.axhline(0, color='black', linewidth=1)
-
-		plt.title(f'Gas Coefficients - Mixture: {args.filename}')
+		plt.title(f'Gas Coefficients - Mixture: {args.filename} @ {temperature:.2f} K, {pressure:.2f} Torr')
 		plt.xlabel('Electric Field E [V/cm]')
 		plt.ylabel('Coefficient [1/cm]')
 		plt.legend()
+
 		plt.grid(True, which="both", ls="-", alpha=0.3)
 
-		# plt.yscale('symlog', linthresh=1e-2)
+		if args.log:
+			plt.yscale('symlog', linthresh=1e-2)
 
 		plt.tight_layout()
 		plt.show()
